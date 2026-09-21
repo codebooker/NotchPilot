@@ -122,7 +122,7 @@ After changing the source, rebuild with the prepared runtime:
 .cache/notch-venv/bin/python NotchPilot/build.py
 ```
 
-The build remembers an available **Apple Development** signing identity to keep macOS permission attribution stable. Without one it uses ad-hoc signing; subsequent code changes may require renewed permission approval. You can explicitly select an identity with `NOTCHPILOT_SIGNING_IDENTITY`. The build does not export signing keys or notarize the app.
+The build finds its runtime (`.cache/notch-venv`, models, and upstream checkouts) in this checkout or the nearest parent folder that has one; set `NOTCHPILOT_RUNTIME_ROOT` to use a runtime elsewhere. The build remembers an available **Apple Development** signing identity to keep macOS permission attribution stable. Without one it uses ad-hoc signing; subsequent code changes may require renewed permission approval. You can explicitly select an identity with `NOTCHPILOT_SIGNING_IDENTITY`. The build does not export signing keys or notarize the app.
 
 Quit the existing app before rebuilding, then reopen it. If Screen Recording was just enabled, quit and reopen once more. For more help, see [Troubleshooting](docs/troubleshooting.md).
 

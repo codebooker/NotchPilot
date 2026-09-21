@@ -8,7 +8,19 @@ import subprocess
 from pathlib import Path
 
 HERE=Path(__file__).resolve().parent
-ROOT=HERE.parent
+
+
+def runtime_root(checkout=HERE.parent):
+    """The venv, models, and upstream checkouts stay outside Git. Use NOTCHPILOT_RUNTIME_ROOT,
+    else the checkout or nearest ancestor that already holds them, else the checkout."""
+    configured=os.environ.get('NOTCHPILOT_RUNTIME_ROOT')
+    if configured:return Path(configured).expanduser().resolve()
+    for candidate in (checkout,*checkout.parents):
+        if (candidate/'.cache/notch-venv/bin/python').exists():return candidate
+    return checkout
+
+
+ROOT=runtime_root()
 APP=HERE/'build/NotchPilot.app'
 
 

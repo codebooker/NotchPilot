@@ -21,6 +21,22 @@ class SigningTests(unittest.TestCase):
             with patch('build.subprocess.check_output',return_value='0 valid identities found'):
                 with self.assertRaisesRegex(RuntimeError,'unavailable'):build.signing_identity()
 
+    def test_runtime_root_prefers_environment(self):
+        with tempfile.TemporaryDirectory() as d,patch.dict(os.environ,{'NOTCHPILOT_RUNTIME_ROOT':d}):
+            self.assertEqual(build.runtime_root(Path(d)/'checkout'),Path(d).resolve())
+
+    def test_runtime_root_finds_ancestor_with_runtime(self):
+        with tempfile.TemporaryDirectory() as d,patch.dict(os.environ,{},clear=True):
+            base=Path(d).resolve();python=base/'.cache/notch-venv/bin/python'
+            python.parent.mkdir(parents=True);python.write_text('')
+            checkout=base/'.cache/publish/NotchPilot';checkout.mkdir(parents=True)
+            self.assertEqual(build.runtime_root(checkout),base)
+
+    def test_runtime_root_defaults_to_checkout(self):
+        with tempfile.TemporaryDirectory() as d,patch.dict(os.environ,{},clear=True):
+            checkout=Path(d).resolve()/'NotchPilot';checkout.mkdir()
+            self.assertEqual(build.runtime_root(checkout),checkout)
+
     def test_explicit_identity_wins(self):
         with patch.dict(os.environ,{'NOTCHPILOT_SIGNING_IDENTITY':'explicit'}):
             self.assertEqual(build.signing_identity(),'explicit')

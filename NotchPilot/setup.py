@@ -3,7 +3,9 @@ import shutil
 import subprocess
 from pathlib import Path
 
-ROOT=Path(__file__).resolve().parents[1]
+from build import HERE, runtime_root
+
+ROOT=runtime_root()
 CACHE=ROOT/'.cache'
 REPOS={
     'jev-ultrafast':('https://github.com/browser-use/jev-ultrafast.git','1231850a0bf1a0c0341fe408ef1668dbbfdfac46'),
@@ -31,7 +33,7 @@ def main():
     run(['cmake','-S',whisper,'-B',whisper/'build','-DCMAKE_BUILD_TYPE=Release','-DWHISPER_BUILD_TESTS=OFF','-DWHISPER_BUILD_SERVER=OFF'])
     run(['cmake','--build',whisper/'build','--config','Release','-j','6','--target','whisper-cli'])
     # Model weights are downloaded by the user from Settings after launch.
-    run([python,ROOT/'NotchPilot/build.py'])
+    run([python,HERE/'build.py'])
 
 
 if __name__=='__main__':main()
