@@ -105,6 +105,33 @@ class BatchTests(unittest.TestCase):
             elif change=='moved':s['elements'][0]['frame']['y']=50
             else:s['elements'][0]['enabled']=False
             self.assertNotEqual(cua.batch_surface(s),initial)
+    def test_model_view_keeps_app_controls_and_drops_menu_clutter(self):
+        rows=[{'element_token':'s9:0','element_index':0,'role':'AXWindow','label':'Calculator'},
+              {'element_token':'s9:1','element_index':1,'role':'AXButton','label':'6','enabled':True,'selected':False},
+              {'element_token':'s9:2','element_index':2,'role':'AXButton','label':'Equals','enabled':False},
+              {'element_token':'s9:3','element_index':3,'role':'AXMenuBarItem','label':'View'},
+              {'element_token':'s9:4','element_index':4,'role':'AXMenu','label':'View','parent_index':3},
+              {'element_token':'s9:5','element_index':5,'role':'AXMenuItem','label':'Scientific','parent_index':4,'selected':True},
+              {'element_token':'s9:6','element_index':6,'role':'AXMenuItem','label':'Services'},
+              {'element_token':'s9:7','element_index':7,'role':'AXMenu','label':'Services','parent_index':6},
+              {'element_token':'s9:8','element_index':8,'role':'AXMenuItem','label':'Ask Claude','parent_index':7}]
+        view,ids=cua.model_view({'app_name':'Calculator','window_title':'Calculator','elements':rows,'tree_markdown':'- AXStaticText = "42"'})
+        self.assertEqual(view['controls'],[{'element_token':'1','role':'AXButton','label':'6'},
+            {'element_token':'2','role':'AXButton','label':'Equals','enabled':False},
+            {'element_token':'3','role':'AXMenuBarItem','label':'View'},
+            {'element_token':'5','role':'AXMenuItem','label':'Scientific','selected':True}])
+        self.assertEqual(view['visible_text'],['- AXStaticText = "42"'])
+        self.assertEqual(ids,{'1':'s9:1','2':'s9:2','3':'s9:3','5':'s9:5'})
+    def test_short_ids_map_back_to_snapshot_tokens(self):
+        ids={'1':'s9:1','2':'s9:2'}
+        choice=cua.restore_tokens({'action':'click','element_token':'1','following_clicks':['2','9']},ids)
+        self.assertEqual(choice['element_token'],'s9:1')
+        self.assertEqual(choice['following_clicks'],['s9:2','9'],'Unknown ids stay unknown and fail validation later')
+        self.assertEqual(cua.restore_tokens({'action':'done','element_token':'','following_clicks':[]},ids)['element_token'],'')
+    def test_static_context_is_in_the_cacheable_instructions(self):
+        system=cua.system_prompt(['Calculator','Safari'])
+        self.assertTrue(system.startswith(cua.INSTRUCTIONS))
+        self.assertIn('"Calculator"',system);self.assertIn('select_all',system)
     def test_numeric_display_changes_are_allowed_only_in_calculator(self):
         s=copy.deepcopy(self.snapshot);s['tree_markdown']='- AXStaticText = "42"'
         self.assertEqual(cua.batch_surface(self.snapshot),cua.batch_surface(s))

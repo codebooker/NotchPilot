@@ -346,6 +346,45 @@ def model_snapshot(snapshot):
             'visible_text':text,'controls':compact,'complete':snapshot.get('elements_complete',False)}
 
 
+# What the model reads. Containers are not clickable; the system-wide Services submenu lists other
+# apps' tools (and is an injection surface); default flags cost tokens on every control.
+VIEW_SKIPPED_ROLES=('AXWindow','AXMenu','AXMenuBar','AXToolbar')
+
+
+def model_view(snapshot):
+    """Compact snapshot for the model plus a map from short ids back to this snapshot's tokens."""
+    rows=list(elements(snapshot).values());hidden=set()
+    for row in rows:
+        if (row.get('role')=='AXMenuItem' and row.get('label')=='Services') or (row.get('label')=='Apple' and row.get('role')=='AXMenuBarItem') \
+                or row.get('parent_index') in hidden:
+            hidden.add(row.get('element_index'))
+    controls=[];ids={}
+    for row in rows:
+        if row.get('element_index') in hidden or row.get('role') in VIEW_SKIPPED_ROLES:continue
+        index=row.get('element_index');short=str(index) if isinstance(index,int) else row['element_token']
+        ids[short]=row['element_token']
+        control={'element_token':short,**{k:row[k] for k in ('role','label','value') if row.get(k) not in (None,'')}}
+        if row.get('enabled') is False:control['enabled']=False
+        if row.get('selected') is True:control['selected']=True
+        controls.append(control)
+    compact=model_snapshot(snapshot)
+    return {'app':compact['app'],'window':compact['window'],'visible_text':compact['visible_text'],'controls':controls,
+            'complete':compact['complete']},ids
+
+
+def restore_tokens(choice,ids):
+    """Maps the model's short ids back to snapshot tokens; unknown ids fail validation as before."""
+    choice=dict(choice)
+    if choice.get('element_token') in ids:choice['element_token']=ids[choice['element_token']]
+    choice['following_clicks']=[ids.get(token,token) for token in choice.get('following_clicks') or []]
+    return choice
+
+
+def system_prompt(installed_apps):
+    """Everything that stays the same between decisions, first, so providers can cache it."""
+    return INSTRUCTIONS+'\nContext: '+json.dumps({'installed_apps':sorted(installed_apps),'supported_keys':list(KEYS)},separators=(',',':'))
+
+
 async def observe_window(driver,pid,window_id):
     # Newly opened windows can briefly have no AX data. Some native sheets
     # never expose it through this driver; model retries cannot repair that.
@@ -446,7 +485,7 @@ async def run(root,goal,emit,handshake,preview=False,allow_writer=False,context=
                 snapshot=await observe_window(driver,pid,window_id)
                 observed_after_action=True
                 history.append({'observed_current_window':window_id,'app':snapshot.get('app_name',''),'executed':False})
-            state={'installed_apps':sorted(catalog),'supported_keys':list(KEYS),'earlier_commands':(context or [])[-4:]}
+            state={'earlier_commands':(context or [])[-4:]};system=system_prompt(catalog);ids={}
             for step in range(min(MAX_TASK_STEPS,MAX_STAGE_STEPS*len(stages))):
                 # Wait at an action boundary before the host lets its own editor
                 # take focus. Async waiting keeps Stop responsive during review.
@@ -491,23 +530,24 @@ async def run(root,goal,emit,handshake,preview=False,allow_writer=False,context=
                     metric('local_calculation',0)
                 if choice is None:
                     emit('status',text='Choosing the next step',step=step+1,cost=cost)
-                    state.update(goal=stages[stage],completed_stages=stages[:stage],windows=windows,current_window_id=window_id,snapshot=model_snapshot(snapshot),
+                    view,ids=model_view(snapshot)
+                    state.update(goal=stages[stage],completed_stages=stages[:stage],windows=windows,current_window_id=window_id,snapshot=view,
                                  recent_actions=history,observed_apps=observed_apps,text_composition_enabled=allow_writer,
                                  literal_dictation=dictated_text(stages[stage].split('\nOriginal request: ',1)[-1]))
-                    reserved=(len(json.dumps(state).encode())+len(INSTRUCTIONS.encode())+len(json.dumps(SCHEMA).encode())+1024)*0.00000025+0.005
+                    reserved=(len(json.dumps(state).encode())+len(system.encode())+len(json.dumps(SCHEMA).encode())+1024)*0.00000025+0.005
                     if cost+reserved>0.25:raise RuntimeError('The task reached its API budget. No further action was taken.')
                     decision_started=time.perf_counter()
                     response=await client.post('https://openrouter.ai/api/v1/chat/completions',headers={'Authorization':'Bearer '+key},json={
                         'model':MODEL,'max_completion_tokens':2500,'reasoning':{'effort':REASONING},
                         'provider':{'sort':'latency'},
-                        'messages':[{'role':'system','content':INSTRUCTIONS},{'role':'user','content':json.dumps(state)}],
+                        'messages':[{'role':'system','content':system},{'role':'user','content':json.dumps(state,separators=(',',':'))}],
                         'response_format':{'type':'json_schema','json_schema':{'name':'next_action','strict':True,'schema':SCHEMA}}})
                     if response.status_code!=200:raise RuntimeError(f'The Cua controller’s model service returned HTTP {response.status_code}. Check your connection in Setup.')
                     body=response.json();usage=body.get('usage',{});cost+=float(usage['cost']) if usage.get('cost') is not None else reserved
                     metric('model',time.perf_counter()-decision_started,model=MODEL,reasoning=REASONING,step=step+1,
                            input_tokens=usage.get('prompt_tokens'),output_tokens=usage.get('completion_tokens'))
                     emit('status',text='Checking the next step',cost=cost)
-                    choice=parse_decision(body)
+                    choice=restore_tokens(parse_decision(body),ids)
                     if (root/'.cache/notchpilot-trace-enabled').exists():
                         with (root/'.cache/notchpilot-trace.jsonl').open('a') as trace:
                             trace.write(json.dumps({'run':run_id,'state':state,'choice':choice})+'\n')
