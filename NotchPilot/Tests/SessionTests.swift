@@ -66,6 +66,8 @@ import Foundation
         owner.speech=nil;owner.stop(close:true)
         precondition(!owner.state.recording && owner.commands.context.isEmpty && owner.commands.pending.isEmpty)
         precondition(PilotCopy.issue("The model service took too long to reply.")=="Slow connection. Please try again.")
+        precondition(PilotCopy.issue("Cua can see this window, but its controls are unavailable.")=="This window needs your help.")
+        precondition(PilotCopy.issue("This part of the task reached its step limit.")=="Please split this into smaller requests.")
         precondition(PilotCopy.hasConfiguredKey("OPENROUTER_API_KEY",in:"export OPENROUTER_API_KEY = \"test\""))
         precondition(!PilotCopy.hasConfiguredKey("OPENROUTER_API_KEY",in:"# OPENROUTER_API_KEY=test"))
         precondition(!PilotCopy.hasConfiguredKey("OPENROUTER_API_KEY",in:"OPENROUTER_API_KEY=\"\""))

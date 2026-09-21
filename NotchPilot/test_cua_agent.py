@@ -151,7 +151,7 @@ class BatchTests(unittest.TestCase):
 
 
 class ControllerTests(unittest.IsolatedAsyncioTestCase):
-    async def scenario(self,decisions,preview=False,changed_surface=False,interrupt=False,recorded_calls=None,effect=None,new_document=False,goal_override=None,cancel_checkpoint=None):
+    async def scenario(self,decisions,preview=False,changed_surface=False,interrupt=False,recorded_calls=None,effect=None,new_document=False,goal_override=None,cancel_checkpoint=None,empty_observations=0):
         calls=[] if recorded_calls is None else recorded_calls;events=[];requests=[];instances=[]
         class Driver:
             revision=0
@@ -168,6 +168,8 @@ class ControllerTests(unittest.IsolatedAsyncioTestCase):
                     return {'windows':[{'window_id':20,'title':'Old document'}]+([{'window_id':21,'title':'New document'}] if self.new_window else [])}
                 if name=='get_window_state':
                     self.revision+=1
+                    if self.revision<=empty_observations:
+                        return {'app_name':'Calculator','window_title':'Save','elements':[],'tree_markdown':''}
                     return {'app_name':'Calculator','window_title':'Calculator',
                         'tree_markdown':'- AXStaticText = "Unexpected dialog"' if changed_surface and self.revision>1 else '',
                         'elements':[{'element_token':f's{self.revision}','label':'6','role':'AXTextArea' if new_document else 'AXButton'},
@@ -224,6 +226,55 @@ class ControllerTests(unittest.IsolatedAsyncioTestCase):
     async def test_completion_without_observation_is_rejected(self):
         with self.assertRaisesRegex(RuntimeError,'verify'):
             await self.scenario([{'action':'done','reason':'Trust me'}])
+    async def test_transient_empty_window_is_reobserved_before_model_decision(self):
+        calls,events,requests=await self.scenario([{'action':'click','element_token':'s2'},
+            {'action':'done','reason':'Verified'}],goal_override='Open Calculator',empty_observations=1)
+        self.assertTrue(events[-1][1]['success'])
+        self.assertEqual(len(requests),2)
+        self.assertEqual(sum(name=='get_window_state' for name,_ in calls),3)
+    async def test_unreadable_window_stops_without_paying_for_repeated_decisions(self):
+        calls=[]
+        with self.assertRaisesRegex(RuntimeError,'controls are unavailable'):
+            await self.scenario([],goal_override='Open Calculator',empty_observations=100,recorded_calls=calls)
+        self.assertEqual(sum(name=='get_window_state' for name,_ in calls),3)
+        self.assertFalse(any(name in ('click','type_text','press_key','hotkey') for name,_ in calls))
+        self.assertEqual(calls[-1][0],'closed')
+    async def test_read_only_window_text_is_sufficient_for_observation(self):
+        class TextWindow:
+            async def call(self,*args,**kwargs):
+                return {'tree_markdown':'- AXStaticText = "Finished"','elements':[]}
+        snapshot=await cua.observe_window(TextWindow(),10,20)
+        self.assertIn('Finished',snapshot['tree_markdown'])
+    async def test_chain_has_a_separate_step_allowance_for_each_stage(self):
+        decisions=[]
+        for _ in range(2):
+            decisions.extend([{'action':'observe','window_id':20} for _ in range(14)])
+            decisions.append({'action':'done','reason':'Verified stage'})
+        _,events,_=await self.scenario(decisions,goal_override='Open Calculator then inspect Calculator')
+        self.assertTrue(events[-1][1]['success'])
+    async def test_single_stage_still_stops_at_its_step_limit(self):
+        with self.assertRaisesRegex(RuntimeError,'step limit'):
+            await self.scenario([{'action':'observe','window_id':20} for _ in range(30)],goal_override='Open Calculator')
+    async def test_chain_cannot_spend_later_stages_allowances_on_a_stuck_stage(self):
+        with self.assertRaisesRegex(RuntimeError,'part of the task reached its step limit'):
+            await self.scenario([{'action':'observe','window_id':20} for _ in range(30)],
+                                goal_override='Open Calculator then inspect Calculator')
+    async def test_chain_total_step_limit_remains_bounded(self):
+        decisions=[]
+        for _ in range(5):
+            decisions.extend([{'action':'observe','window_id':20} for _ in range(18)])
+            decisions.append({'action':'done','reason':'Verified stage'})
+        with self.assertRaisesRegex(RuntimeError,'task reached its step limit'):
+            await self.scenario(decisions,goal_override='Open Calculator'+(' then inspect Calculator'*4))
+    async def test_explicit_repeated_stages_do_not_trigger_loop_detection(self):
+        decisions=[]
+        for i in range(1,4):
+            decisions.extend([{'action':'click','element_token':f's{i}'}, {'action':'done','reason':'Verified'}])
+        _,events,_=await self.scenario(decisions,goal_override='In Calculator, click 6 then click 6 then click 6')
+        self.assertTrue(events[-1][1]['success'])
+    async def test_repeated_input_within_one_stage_still_stops(self):
+        with self.assertRaisesRegex(RuntimeError,'repeating the same step'):
+            await self.scenario([{'action':'click','element_token':f's{i}'} for i in range(1,4)],goal_override='Open Calculator')
     async def test_preview_does_not_launch_or_click(self):
         calls,events,_=await self.scenario([{'action':'open_app','app':'Calculator'}],preview=True)
         self.assertNotIn('launch_app',[name for name,_ in calls])

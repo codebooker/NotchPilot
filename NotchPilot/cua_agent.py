@@ -19,6 +19,8 @@ from dotenv import load_dotenv
 
 MODEL='openai/gpt-5-mini'
 REASONING='low'
+MAX_STAGE_STEPS=24
+MAX_TASK_STEPS=72
 KEYS={'enter':('return',[]),'escape':('escape',[]),'tab':('tab',[]),
       'select_all':('a',['cmd']),'address_bar':('l',['cmd']),
       'new_tab':('t',['cmd']),'find':('f',['cmd']),
@@ -338,6 +340,21 @@ def model_snapshot(snapshot):
             'visible_text':text,'controls':compact,'complete':snapshot.get('elements_complete',False)}
 
 
+async def observe_window(driver,pid,window_id):
+    # Newly opened windows can briefly have no AX data. Some native sheets
+    # never expose it through this driver; model retries cannot repair that.
+    for delay in (0,.15,.35):
+        if delay:await asyncio.sleep(delay)
+        snapshot=await driver.call('get_window_state',pid=pid,window_id=window_id,
+            include_screenshot=False,include_accessibility_tree=True,max_elements=220,max_depth=20)
+        snapshot.pop('images',None)
+        if len(json.dumps(snapshot))>65000:
+            raise RuntimeError('This window contains too much information. Try a narrower task.')
+        compact=model_snapshot(snapshot)
+        if compact['controls'] or compact['visible_text']:return snapshot
+    raise RuntimeError('Cua can see this window, but its controls are unavailable. Finish or dismiss any open dialog, then try again. No input was sent to the unreadable window.')
+
+
 def action_args(choice,snapshot,pid,window_id,goal,allow_writer):
     kind=choice['action'];token=choice.get('element_token','')
     if (kind in ('click','type') or kind=='key' and token) and token not in elements(snapshot):
@@ -399,7 +416,7 @@ async def run(root,goal,emit,handshake,preview=False,allow_writer=False,context=
     loop.add_signal_handler(signal.SIGTERM,task.cancel)
     cost=0.0;started=time.monotonic();history=[];repetitions={};snapshot={};pid=None;window_id=None;windows=[];observed_after_action=False
     timings=[];run_id=uuid.uuid4().hex;pending=[];surface=None;succeeded=False;observed_apps={};created_documents=set()
-    stages=command_steps(goal);stage=0;stage_started=False;arithmetic=None;calculation_entered=False;last_typed_field=None
+    stages=command_steps(goal);stage=0;stage_steps=0;stage_started=False;arithmetic=None;calculation_entered=False;last_typed_field=None
     def metric(name,seconds,**details):
         timings.append({'run':run_id,'metric':name,'seconds':round(seconds,4),**details})
     review_wait=0.0
@@ -411,7 +428,7 @@ async def run(root,goal,emit,handshake,preview=False,allow_writer=False,context=
             perms=await driver.call('check_permissions')
             if not perms.get('accessibility'):raise RuntimeError('Cua cannot access controls through NotchPilot. Check Accessibility in Setup.')
             state={'installed_apps':sorted(catalog),'supported_keys':list(KEYS),'earlier_commands':(context or [])[-4:]}
-            for step in range(24):
+            for step in range(min(MAX_TASK_STEPS,MAX_STAGE_STEPS*len(stages))):
                 # Wait at an action boundary before the host lets its own editor
                 # take focus. Async waiting keeps Stop responsive during review.
                 review_started=time.monotonic()
@@ -419,6 +436,8 @@ async def run(root,goal,emit,handshake,preview=False,allow_writer=False,context=
                 review_wait += time.monotonic()-review_started
                 if time.monotonic()-started-review_wait>180:raise RuntimeError('This task took too long. Try one smaller step.')
                 if cost>=0.20:raise RuntimeError('The task reached its API budget. No further action was taken.')
+                if stage_steps>=MAX_STAGE_STEPS:raise RuntimeError('This part of the task reached its step limit. Try a smaller request.')
+                stage_steps+=1
                 choice=None
                 if not stage_started:
                     stage_started=True
@@ -473,7 +492,10 @@ async def run(root,goal,emit,handshake,preview=False,allow_writer=False,context=
                 if kind=='done':
                     if not observed_after_action or not snapshot:raise RuntimeError('The controller could not verify a completed result.')
                     if stage+1<len(stages):
-                        stage+=1;stage_started=False;pending=[];observed_after_action=False
+                        stage+=1;stage_steps=0;stage_started=False;pending=[];observed_after_action=False
+                        # Loop detection belongs to the current instruction. A
+                        # later explicit stage may intentionally repeat an action.
+                        repetitions.clear();last_typed_field=None
                         metric('stage_complete',0,stage=stage)
                         continue
                     succeeded=True
@@ -552,19 +574,15 @@ async def run(root,goal,emit,handshake,preview=False,allow_writer=False,context=
                     'control':elements(snapshot).get(choice.get('element_token',''),{}).get('label','')})
                 if window_id:
                     await ensure_front(driver,pid,window_id)
-                    emit('status',text='Checking the result',cost=cost)
-                    snapshot=await driver.call('get_window_state',pid=pid,window_id=window_id,
-                        include_screenshot=False,include_accessibility_tree=True,max_elements=220,max_depth=20)
-                    # Only bounded AX data reaches the model; no screenshot/file artifacts.
-                    snapshot.pop('images',None)
-                    if len(json.dumps(snapshot))>65000:raise RuntimeError('This window contains too much information. Try a narrower task.')
+                    emit('status',text='Checking the result',step=step+1,cost=cost)
+                    snapshot=await observe_window(driver,pid,window_id)
                     observed_after_action=True
                     if snapshot.get('app_name'):
                         observed_apps[snapshot['app_name']]={'window_id':window_id,'window_title':snapshot.get('window_title',''),'observed_after_action':len(history)}
             raise RuntimeError('The task reached its step limit. Try a smaller request.')
     finally:
         loop.remove_signal_handler(signal.SIGTERM)
-        metric('total',time.monotonic()-started,cost=cost,success=succeeded,version='app-chains-v4')
+        metric('total',time.monotonic()-started,cost=cost,success=succeeded,version='app-chains-v5')
         # Local timings only: no utterances, window contents, typed text, or keys.
         try:
             path=root/'.cache/notchpilot-performance.jsonl';path.parent.mkdir(parents=True,exist_ok=True)

@@ -7,7 +7,8 @@ enum PilotCopy {
         if text.contains("permission") || text.contains("accessibility") || text.contains("screen capture") { return "Check access in Settings" }
         if text.contains("too long") || text.contains("timeout") { return "Slow connection. Please try again." }
         if text.contains("focused app changed") || text.contains("window moved") { return "The window changed. Try again." }
-        if text.contains("response space") { return "Please split this into smaller requests." }
+        if text.contains("controls are unavailable") { return "This window needs your help." }
+        if text.contains("response space") || text.contains("step limit") { return "Please split this into smaller requests." }
         if text.contains("low confidence") || text.contains("supported next action") { return "Please try a simpler instruction." }
         if text.contains("api key") || text.contains("401") { return "Check your connection in Setup" }
         if text.contains("download") || text.contains("model") && text.contains("missing") { return "Finish setup to get started" }
