@@ -37,14 +37,14 @@ The idea is simple: make everyday computer tasks easier to ask for—whether you
 
 | | What you get |
 |---|---|
-| **Talk naturally** | Persistent local Whisper `base.en` transcribes speech without reloading for each phrase. Optional local Qwen3 1.7B helps interpret casual phrasing and asks for missing details. |
+| **Talk naturally** | Persistent local Whisper `base.en` transcribes speech without reloading for each phrase. A local Silero speech detector replaces the old volume gate; optional Qwen3 1.7B helps interpret casual phrasing. |
 | **Keep the conversation going** | Say another request while it works. Follow-ups queue in order, with recent successful tasks as context. |
 | **Dictate and correct** | Say “start dictating,” keep talking, then “replace purple with blue” or “scratch that.” Native Save As recovery helps finish the document. |
 | **See what happens** | The working app comes forward. A rounded lavender cursor shows the target, action feedback, and a compact NotchPilot badge. |
 | **Take your time** | Choose a one-, two-, or three-second speaking pause. Changing it does not cut off the phrase in progress. |
 | **Stay in control** | Cancel a task without closing the mic. Review and clear queued requests. Pause Cua while you type, then resume. |
 | **Keep your retinas** | Dark, Light, or Follow System for conversation and settings. The voice strip stays dark. |
-| **Download once** | Install the local speech and interpretation models from Settings with progress, cancellation, and checksum verification. |
+| **Download once** | Install speech recognition, speech detection, and interpretation models from Settings with progress, cancellation, and checksum verification. |
 | **Choose the engine** | Cua is the default. Jev remains an experimental option with TypeSafe or OpenRouter support. |
 
 ### Try a small request first
@@ -101,7 +101,7 @@ Setup fetches pinned upstream revisions, creates an isolated runtime in `.cache`
 In **Settings → Setup**:
 
 1. Allow **Microphone**, **Accessibility**, and **Screen Recording** for NotchPilot. The app explains the access it needs and links to the relevant macOS settings.
-2. Choose **Download essentials** to install Whisper `base.en` and Qwen3 1.7B. Each model can also be repaired separately under Advanced.
+2. Choose **Download essentials** to install Whisper `base.en`, the 0.9 MB Silero speech detector, and Qwen3 1.7B. Each model can also be repaired separately under Advanced.
 3. Paste your **OpenRouter API key** and choose **Save key**. The app stores it in macOS Keychain.
 4. Choose **Start talking**, or press **Control–Option–Space**.
 
@@ -164,6 +164,7 @@ NotchPilot combines small local models with a desktop controller. It is **not en
 | Component | Runs where | Role |
 |---|---|---|
 | **Whisper base.en** | On your Mac | English speech recognition; approximately 148 MB download. |
+| **Silero VAD v6.2.0** | On your Mac | Speech-versus-silence detection before Whisper; approximately 0.9 MB download. |
 | **Qwen3 1.7B, 4-bit MLX** | On your Mac | Optional request interpretation and clarification; approximately 984 MB download. |
 | **Cua Driver 0.28.2** | On your Mac | Reads native controls and delivers bounded desktop actions. |
 | **GPT-5 mini via OpenRouter** | Online | Default Cua action decisions; optional text composition. API usage is billed by the provider. |
@@ -184,7 +185,7 @@ This is a working experiment with a growing test suite, not a claim that every d
 - Long or open-ended workflows can stall or exceed model limits. A model’s “done” is not independent proof of arbitrary task completion.
 - Standard TextEdit Save As now has a verified native route. Custom dialogs, format conversion, other editors, and general browser research remain uneven.
 - Finder can reach a folder while exposing an unresolvable file URL; NotchPilot then reports an unverified location instead of claiming success.
-- Dictation currently accepts background speech as well as the user’s voice. Sleep mode pauses it; speaker identification is not implemented.
+- Dictation can still accept background speech as well as the user’s voice. Silero VAD rejects many non-speech sounds, but it is not speaker identification. Sleep mode pauses it.
 - English and the primary display are the current supported target. The pointer overlay is not an independent input seat; some actions still use system input.
 - Packaging, onboarding, and broader accessibility testing need work before this can be a dependable everyday assistant for everyone.
 
@@ -226,7 +227,7 @@ Read [CONTRIBUTING](CONTRIBUTING.md), [Architecture](docs/architecture.md), and 
 ## Built on good work
 
 - [Cua](https://github.com/trycua/cua) — native computer-use infrastructure.
-- [whisper.cpp](https://github.com/ggml-org/whisper.cpp) — local speech recognition.
+- [whisper.cpp](https://github.com/ggml-org/whisper.cpp) — local speech recognition and Silero VAD.
 - [MLX LM](https://github.com/ml-explore/mlx-lm) and [Qwen](https://huggingface.co/mlx-community/Qwen3-1.7B-4bit) — local request interpretation.
 - [TypeSafe computer use](https://github.com/awlevin/typesafe-computer-use) and [Jev ultrafast](https://github.com/browser-use/jev-ultrafast) — foundations for the experimental Jev paths.
 

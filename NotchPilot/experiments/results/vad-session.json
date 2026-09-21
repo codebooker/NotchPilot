@@ -1,0 +1,9 @@
+{
+  "scope": "One supplied speech recording and generated digital silence; classifier only",
+  "speech_frames": 60,
+  "speech_min": 0.007899918593466282,
+  "speech_max": 0.9999934434890747,
+  "speech_mean": 0.47624098813782134,
+  "silence_max": 0.011691907420754433,
+  "silence_mean": 0.009333336570610603
+}

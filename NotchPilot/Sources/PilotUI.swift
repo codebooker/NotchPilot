@@ -414,6 +414,8 @@ struct PreferencesView: View {
             PilotCard(title:"Local downloads",subtitle:"Only repair these if a download is missing or damaged.") {
                 model("Speech recognition","Whisper base.en · 148 MB",ready:state.whisperInstalled,name:"whisper")
                 Divider()
+                model("Speech detection","Silero VAD · 0.9 MB",ready:state.vadInstalled,name:"vad")
+                Divider()
                 model("Request interpretation","Qwen3 1.7B · 984 MB",ready:state.qwenInstalled,name:"qwen")
                 if state.downloading { ProgressView(value:state.downloadProgress);Button("Cancel download") { state.cancelDownload?() } }
                 Text(state.downloadStatus).font(.system(size:12)).foregroundStyle(PilotStyle.secondary)

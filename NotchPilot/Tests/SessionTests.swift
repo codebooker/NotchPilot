@@ -233,7 +233,7 @@ import Foundation
         owner.receive(["event":"host_key","pid":-1,"key":"return"],token:owner.generation)
         precondition(owner.state.detail.contains("active app changed"),"Host keyboard input must reject a different foreground app")
         // A hung recognizer must time out once; cancelled callbacks must never insert text.
-        let stalled=Runtime(root:"",python:"",worker:"",whisper:"/bin/sleep",model:"10",planner:"",qwen:"",downloader:"")
+        let stalled=Runtime(root:"",python:"",worker:"",whisper:"/bin/sleep",model:"10",vad:"/bin/sleep",vadModel:"10",planner:"",qwen:"",downloader:"")
         let recognizer=WhisperSession(requestTimeout:0.12)
         var timedOut=0;var cancelledTranscripts=0
         recognizer.transcribe(runtime:stalled,url:URL(fileURLWithPath:"/tmp/test.wav"),dictation:true) { _ in cancelledTranscripts += 1 }

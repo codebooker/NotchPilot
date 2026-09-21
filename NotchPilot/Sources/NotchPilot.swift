@@ -19,6 +19,8 @@ struct Runtime: Decodable {
     let worker: String
     let whisper: String
     let model: String
+    let vad: String
+    let vadModel: String
     let planner: String
     let qwen: String
     let downloader: String
@@ -53,6 +55,7 @@ final class PilotState: ObservableObject {
     @Published var interpreted = ""
     @Published var qwenInstalled = false
     @Published var whisperInstalled = false
+    @Published var vadInstalled = false
     @Published var downloading = false
     @Published var downloadProgress = 0.0
     @Published var downloadStatus = ""
@@ -122,7 +125,7 @@ final class PilotState: ObservableObject {
             .replacingOccurrences(of:"⌘",with:"Command + ").replacingOccurrences(of:"⇧",with:"Shift + ")
     }
     var accessReady: Bool { microphoneAllowed && accessibilityAllowed && screenAllowed && helperAllowed }
-    var modelsReady: Bool { whisperInstalled && (!localInterpreter || qwenInstalled) }
+    var modelsReady: Bool { whisperInstalled && vadInstalled && (!localInterpreter || qwenInstalled) }
     var shortStatus: String {
         if !question.isEmpty { return "One quick question" }
         if needsAttention { return "Let’s try that again" }
@@ -188,6 +191,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var speech: SpeechCapture?
     var transcribing = false
     let whisperSession = WhisperSession()
+    let vadSession = VADSession()
     var audioQueue: [URL] = []
     var transcribingURL: URL?
     var voiceGeneration = UUID()
@@ -245,7 +249,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSApp.setActivationPolicy(.accessory)
         runtime = try? Runtime.load()
         refreshModels()
-        if state.whisperInstalled,let runtime { try? whisperSession.prepare(runtime) }
+        if state.whisperInstalled && state.vadInstalled,let runtime {
+            try? whisperSession.prepare(runtime); try? vadSession.prepare(runtime)
+        }
         let host = NSHostingView(rootView: PilotView(state: state))
         panel = FloatingPanel(contentRect: NSRect(x: 0, y: 0, width: 280, height: 44),
                               styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -426,7 +432,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         pendingVoiceStart=false
         refreshModels()
-        guard state.whisperInstalled && (!state.localInterpreter || state.qwenInstalled) else {
+        guard state.whisperInstalled && state.vadInstalled && (!state.localInterpreter || state.qwenInstalled) else {
             state.phase="Needs attention";state.detail="Download the missing local models in Settings."; showSettings(); return
         }
         if state.question.isEmpty { commands.cancel() }
@@ -505,7 +511,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func startListening() {
-        guard !startingVoice, !state.recording else { return }
+        guard !startingVoice, !state.recording, let runtime else { return }
         startingVoice=true
         let token=UUID(); voiceGeneration=token
         AVCaptureDevice.requestAccess(for:.audio) { [weak self] granted in
@@ -527,14 +533,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                     DispatchQueue.main.async {
                         guard let self, self.voiceGeneration == token else { return }
                         self.state.level=level
-                        if level>0.09 { self.state.lastSpeech=Date() }
+                    }
+                }
+                capture.onVoiceActivity = { [weak self] in
+                    DispatchQueue.main.async {
+                        guard let self, self.voiceGeneration == token else { return }
+                        self.state.lastSpeech=Date()
                     }
                 }
                 capture.onError = { [weak self] message in
                     DispatchQueue.main.async { guard let self, self.voiceGeneration == token else { return }; self.fail(message) }
                 }
                 do {
-                    self.speech=capture; try capture.start(); self.state.recording=true
+                    try self.vadSession.prepare(runtime)
+                    self.speech=capture; try capture.start(vad:self.vadSession); self.state.recording=true
                     self.state.phase=self.state.question.isEmpty ? "Listening" : "Listening for your answer"; self.state.detail="Pause after speaking to submit. \(self.state.shortcutLabel) stops the session."
                 } catch { self.fail("Microphone capture could not start. Check the input device and permissions.") }
             }
@@ -899,6 +911,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         state.qwenInstalled=installed("qwen",directory:runtime.qwen)
         let whisperDirectory=URL(fileURLWithPath:runtime.model).deletingLastPathComponent().path
         state.whisperInstalled=installed("whisper",directory:whisperDirectory)
+        state.vadInstalled=installed("vad",directory:URL(fileURLWithPath:runtime.vadModel).deletingLastPathComponent().path)
     }
     var pendingModelDownloads: [String] = []
     func cancelModelDownload() {
@@ -909,7 +922,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func downloadModel(_ name: String) {
         if name == "essentials" {
             refreshModels()
-            pendingModelDownloads = ["whisper","qwen"].filter { $0 == "whisper" ? !state.whisperInstalled : state.localInterpreter && !state.qwenInstalled }
+            pendingModelDownloads = ["whisper","vad","qwen"].filter {
+                $0 == "whisper" ? !state.whisperInstalled : $0 == "vad" ? !state.vadInstalled : state.localInterpreter && !state.qwenInstalled
+            }
             guard !pendingModelDownloads.isEmpty else { return }
             downloadModel(pendingModelDownloads.removeFirst());return
         }
@@ -1033,6 +1048,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc func quit() { stop(close:true); NSApp.terminate(nil) }
     func applicationWillTerminate(_ notification: Notification) {
         whisperSession.shutdown()
+        vadSession.shutdown()
         stop(close:true); downloadTask?.terminate(); permissionTask?.terminate()
         if let localMonitor { NSEvent.removeMonitor(localMonitor); self.localMonitor=nil }
         if let hotKey { UnregisterEventHotKey(hotKey); self.hotKey=nil }

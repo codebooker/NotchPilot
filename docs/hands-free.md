@@ -65,7 +65,7 @@ Custom save dialogs, editors without readable selections, and documents with mul
 
 A signed helper loads Whisper **base.en** once and stays resident. Requests travel over private stdin/stdout pipes, with no HTTP listener. Each phrase is decoded independently, so “persistent” refers to loaded weights rather than a growing transcript prompt. Temporary WAVs are removed after use or cancellation. Cancelled request IDs cannot return text to the editor; a 90-second request timeout resets a stuck helper.
 
-Dictation remains active across pauses. An individual unbroken phrase may last up to 120 seconds; command mode retains its 30-second bound. Overlong phrases are discarded through the next pause rather than executed partially. This is phrase-based dictation, not live partial-word streaming. Segmentation still uses audio energy and the selected pause duration; neural voice detection and personalized vocabulary are future work.
+Dictation remains active across pauses. An individual unbroken phrase may last up to 120 seconds; command mode retains its 30-second bound. Overlong phrases are discarded through the next pause rather than executed partially. This is phrase-based dictation, not live partial-word streaming. A local Silero VAD classifier now decides which 32 ms frames contain speech; your selected pause decides when that speech becomes a phrase. See [speech detection](speech-detection.md).
 
 ## Verified in this development pass
 

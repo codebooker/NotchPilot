@@ -7,6 +7,10 @@ final class SpeechCapture {
     let engine = AVAudioEngine()
     let queue = DispatchQueue(label: "local.notchpilot.audio")
     var segmenter: SpeechSegmenter?
+    var resampler: StreamingResampler?
+    var pendingFrames: [Float] = []
+    weak var vad: SpeechFrameClassifier?
+    var vadEpoch = UUID()
     var pauseDuration: Double = 1.0
     func setPause(_ seconds: Double) {
         queue.sync { pauseDuration=seconds; segmenter?.setPause(seconds) }
@@ -17,33 +21,26 @@ final class SpeechCapture {
     var lastMeter = Date.distantPast
     var onSegment: ((URL, UUID) -> Void)?
     var onLevel: ((CGFloat) -> Void)?
+    var onVoiceActivity: (() -> Void)?
     var onError: ((String) -> Void)?
     var hasPendingSpeech: Bool { queue.sync { segmenter?.active == true || segmenter?.discarding == true } }
 
-    func start() throws {
+    func start(vad: SpeechFrameClassifier) throws {
         let node = engine.inputNode
         let format = node.outputFormat(forBus: 0)
         guard format.sampleRate > 0, format.channelCount > 0 else {
             throw NSError(domain: "Microphone unavailable", code: 1)
         }
         queue.sync {
-            running = true; segmenter = SpeechSegmenter(sampleRate: format.sampleRate, pause: pauseDuration)
+            running = true; self.vad=vad; segmenter = SpeechSegmenter(sampleRate: 16000, pause: pauseDuration)
+            resampler=StreamingResampler(sourceRate:format.sampleRate); pendingFrames=[];vadEpoch=UUID()
         }
         node.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
             guard let self, let channels = buffer.floatChannelData else { return }
             let samples = Array(UnsafeBufferPointer(start: channels[0], count: Int(buffer.frameLength)))
             self.queue.async {
                 guard self.running else { return }
-                if let completed = self.segmenter?.append(samples) {
-                    do {
-                        let url = try Self.write(completed, sampleRate: format.sampleRate)
-                        self.onSegment?(url, self.segmentEpoch)
-                    } catch { self.onError?("Could not prepare speech for local Whisper.") }
-                }
-                if self.segmenter?.overflow == true {
-                    self.segmenter?.overflow = false
-                    self.onError?("That phrase exceeded the recording limit and was discarded. Pause, then try a shorter phrase.")
-                }
+                self.enqueueForVAD(samples)
                 if Date().timeIntervalSince(self.lastMeter) > 0.08 {
                     self.lastMeter = Date()
                     let rms = sqrt(samples.reduce(0.0) { $0 + Double($1 * $1) } / Double(max(1,samples.count)))
@@ -56,13 +53,13 @@ final class SpeechCapture {
     }
     func discardPendingSpeech(epoch: UUID) {
         queue.sync {
-            segmentEpoch = epoch
-            segmenter?.reset()
+            segmentEpoch = epoch;vadEpoch=UUID()
+            segmenter?.reset();pendingFrames.removeAll();resampler?.reset();vad?.reset()
         }
     }
     func stop() {
         engine.stop(); engine.inputNode.removeTap(onBus: 0)
-        queue.sync { running = false; segmenter = nil }
+        queue.sync { running = false;vadEpoch=UUID(); segmenter = nil;pendingFrames.removeAll();resampler=nil;vad?.reset();vad=nil }
     }
     static func write(_ samples: [Float], sampleRate: Double) throws -> URL {
         let sourceFormat = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)!
@@ -90,4 +87,56 @@ final class SpeechCapture {
         } catch { try? FileManager.default.removeItem(at:url); throw error }
         return url
     }
+
+    private func enqueueForVAD(_ samples:[Float]) {
+        guard let resampled=resampler?.append(samples),!resampled.isEmpty,let vad else { return }
+        pendingFrames.append(contentsOf:resampled)
+        while pendingFrames.count >= 512 {
+            let frame=Array(pendingFrames.prefix(512));pendingFrames.removeFirst(512)
+            let epoch=vadEpoch
+            vad.classify(frame,deliverOn:queue) { [weak self] result in
+                guard let self,self.running,self.vadEpoch==epoch else { return }
+                switch result {
+                case .failure(let error): self.onError?(error.localizedDescription)
+                case .success(let probability): self.consume(frame,speech:probability >= 0.5)
+                }
+            }
+        }
+    }
+
+    private func consume(_ samples:[Float],speech:Bool) {
+        if speech { onVoiceActivity?() }
+        if let completed=segmenter?.append(samples,speech:speech) {
+            do { onSegment?(try Self.write(completed,sampleRate:16000),segmentEpoch) }
+            catch { onError?("Could not prepare speech for local Whisper.") }
+            vad?.reset()
+        }
+        if segmenter?.overflow == true {
+            segmenter?.overflow=false;vad?.reset()
+            onError?("That phrase exceeded the recording limit and was discarded. Pause, then try a shorter phrase.")
+        }
+    }
+}
+
+/// Maintains fractional timing across arbitrary microphone callback sizes.
+struct StreamingResampler {
+    let sourceRate: Double
+    private let targetRate: Double = 16000
+    private var carry:[Float] = []
+    private var position:Double = 0
+    init(sourceRate:Double) { self.sourceRate=sourceRate }
+    mutating func append(_ samples:[Float]) -> [Float] {
+        carry.append(contentsOf:samples)
+        guard carry.count>1 else { return [] }
+        let step=sourceRate/targetRate;var output:[Float]=[]
+        while position+1<Double(carry.count) {
+            let i=Int(position);let fraction=Float(position-Double(i))
+            output.append(carry[i]*(1-fraction)+carry[i+1]*fraction)
+            position += step
+        }
+        let drop=max(0,Int(position)-1)
+        if drop>0 { carry.removeFirst(drop);position -= Double(drop) }
+        return output
+    }
+    mutating func reset() { carry.removeAll();position=0 }
 }

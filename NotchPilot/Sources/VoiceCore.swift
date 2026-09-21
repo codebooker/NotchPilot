@@ -1,5 +1,10 @@
 import Foundation
 
+protocol SpeechFrameClassifier: AnyObject {
+    func classify(_ frame:[Float], deliverOn queue:DispatchQueue, completion:@escaping (Result<Float,Error>) -> Void)
+    func reset()
+}
+
 // Pure state machines shared by microphone capture, the app, and replay tests.
 struct SpeechSegmenter {
     let sampleRate: Double
@@ -18,23 +23,19 @@ struct SpeechSegmenter {
     var voiced: Double = 0
     var silent: Double = 0
     var maxDuration: Double = 30
-    var noiseDB: Double = -65
     var active = false
     var overflow = false
     var discarding = false
 
-    mutating func append(_ samples: [Float]) -> [Float]? {
+    /// `speech` comes from the resident Silero VAD, not a volume threshold.
+    mutating func append(_ samples: [Float], speech: Bool) -> [Float]? {
         guard !samples.isEmpty else { return nil }
         let seconds = Double(samples.count) / sampleRate
-        let power = samples.reduce(0.0) { $0 + Double($1 * $1) } / Double(samples.count)
-        let db = 10 * log10(max(power, 1e-12))
-        let speech = db > max(-42, noiseDB + 10)
         if discarding {
             silent = speech ? 0 : silent + seconds
             if silent >= pause { discarding = false; reset() }
             return nil
         }
-        if !active && !speech { noiseDB = noiseDB * 0.98 + db * 0.02 }
         if speech && !active {
             active = true; utterance = lead; lead.removeAll(); voiced = 0; silent = 0
         }

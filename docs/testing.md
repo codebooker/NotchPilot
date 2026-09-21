@@ -110,6 +110,10 @@ The helper uses the pinned CLI's optimized flash-attention setting. The app prew
 
 Native session tests separately check that cancelled callbacks stay silent and a nonresponding helper times out once.
 
+## Speech-aware VAD
+
+NotchPilot uses the local Silero v6.2.0 model supplied through whisper.cpp's VAD support, rather than a volume threshold, to classify 32 ms microphone frames. The [speech detection report](speech-detection.md) includes the command and limited replay result: 0.99999 maximum probability in one spoken recording, versus 0.0117 maximum for generated silence. The VAD model is downloaded separately and checksum-verified; CI does not download it.
+
 ## S1 Forms
 
 See the [S1 evaluation](cua-s1-evaluation.md) for source/model pins, 60 fictional decisions, CPU timings, upstream tests, and a separate browser delivery smoke that verified only six of eight fields. It is not included in the ordinary unit suite or default runtime.

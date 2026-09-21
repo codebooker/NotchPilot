@@ -65,5 +65,16 @@
         "sha256": "a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002"
       }
     ]
+  },
+  "vad": {
+    "directory": "vad-models",
+    "base_url": "https://huggingface.co/ggml-org/whisper-vad/resolve/main/",
+    "files": [
+      {
+        "name": "ggml-silero-v6.2.0.bin",
+        "size": 885098,
+        "sha256": "2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987"
+      }
+    ]
   }
 }

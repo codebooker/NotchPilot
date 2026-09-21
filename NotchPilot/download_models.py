@@ -45,12 +45,13 @@ def install(root,name,manifest,opener=urllib.request.urlopen):
         finally:partial.unlink(missing_ok=True)
         complete+=spec['size']
     temporary=receipt.with_suffix('.tmp');temporary.write_text(json.dumps(model));os.replace(temporary,receipt)
-    emit(event='done',text=('Qwen3 1.7B' if name=='qwen' else 'Whisper base.en')+' installed and verified.',progress=1)
+    labels={'qwen':'Qwen3 1.7B','whisper':'Whisper base.en','vad':'Silero speech detection'}
+    emit(event='done',text=labels[name]+' installed and verified.',progress=1)
 
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--root',type=Path,required=True)
-    parser.add_argument('--model',choices=['qwen','whisper'],required=True);args=parser.parse_args()
+    parser.add_argument('--model',choices=['qwen','whisper','vad'],required=True);args=parser.parse_args()
     manifest=json.loads(Path(__file__).with_name('models.json').read_text())
     install(args.root,args.model,manifest)
 
