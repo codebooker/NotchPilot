@@ -2,6 +2,8 @@
 
 See the [latest regression report](regressions-2026-09-21.md) for ten live trials, the fixes they informed, and remaining Save As limitations.
 
+See the [dictation regression report](dictation-regression.md) for the open-document writing fix, caret/selection tests, and speech-replay limits.
+
 ## Model-free Python checks
 
 On macOS, after the full setup:
@@ -18,7 +20,7 @@ uv pip install --python .venv/bin/python -r requirements-test.txt
 .venv/bin/python -B -m unittest discover -s NotchPilot -p 'test_*.py'
 ```
 
-The current suite has **100 tests**. They cover request validation, navigation verification, command ordering and stage budgets, unreadable-window recovery, fresh element tokens, cancellation/checkpoints, model download integrity, signing identity stability, and experimental adapter behavior. API responses and desktop input are mocked. No API key or model download is required for these checks.
+The current suite has **111 tests**. They cover request validation, navigation verification, command ordering and stage budgets, unreadable-window recovery, fresh element tokens, cancellation/checkpoints, model download integrity, signing identity stability, and experimental adapter behavior. API responses and desktop input are mocked. No API key or model download is required for these checks.
 
 Files named `test_flight_live.py` and `test_recipe_live.py` are explicit manual runners, not unittest cases. Do not launch them as ordinary unit tests: they control apps and can incur API usage. The flight example also contains fixed example dates that must be updated before a relevant live test.
 

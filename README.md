@@ -55,6 +55,8 @@ The idea is simple: make everyday computer tasks easier to ask for—whether you
 “Open Finder, then open Calculator, then open Safari.”
 ```
 
+With a text document open, try **“Write The sun was shining.”** Another “write…” request adds text at the caret while preserving existing content. Use **“type exactly…”** when spacing must stay literal. Plain dictation uses a local insertion path when one document text area is available; composing new prose is a separate option in Advanced.
+
 These describe exercised task types, not a guarantee that every app or phrasing will work. Start with one clear request, then build up to a short sequence.
 
 <p align="center">

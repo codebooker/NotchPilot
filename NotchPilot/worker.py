@@ -537,7 +537,7 @@ def main():
         import asyncio
         from cua_agent import run as run_cua
         # Keep the original words and clarification answers available to the controller.
-        asyncio.run(run_cua(args.root,goal+'\nOriginal request: '+authorization,emit,handshake,args.preview,args.allow_writer,context))
+        asyncio.run(run_cua(args.root,goal+'\nOriginal request: '+authorization,emit,handshake,args.preview,args.allow_writer,context,target=request.get('target')))
     else:
         run(args.root,goal,args.preview,args.provider,args.allow_writer,context,authorization,request.get('flight'))
 

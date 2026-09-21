@@ -49,7 +49,7 @@ def main():
         '-framework','Carbon','-framework','ApplicationServices','-framework','Security','-framework','ScreenCaptureKit'],check=True)
     shutil.copy2(HERE/'worker.py',res/'worker.py')
     shutil.copy2(HERE/'planner.py',res/'planner.py')
-    for filename in ('download_models.py','models.json','navigation.py','flights.py','browser_agent.py','native_browser.py','cua_agent.py'):
+    for filename in ('download_models.py','models.json','navigation.py','flights.py','browser_agent.py','native_browser.py','cua_agent.py','dictation.py'):
         shutil.copy2(HERE/filename,res/filename)
     cua_binary=subprocess.check_output([runtime['python'],'-B','-c','from cua_driver import get_binary_path; print(get_binary_path())'],text=True).strip()
     shutil.copy2(cua_binary,res/'cua-driver')

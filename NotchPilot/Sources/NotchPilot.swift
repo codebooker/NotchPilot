@@ -207,6 +207,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var input: Pipe?
     var generation = UUID()
     var targetApp: NSRunningApplication?
+    var targetWindowID: Int?
     var localMonitor: Any?
     var escapeHotKey: EventHotKeyRef?
     var preferences: NSWindow?
@@ -406,7 +407,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         else { openVoice() }
     }
     func rememberTarget() {
-        if let app = NSWorkspace.shared.frontmostApplication, app.processIdentifier != ProcessInfo.processInfo.processIdentifier { targetApp = app }
+        if let app = NSWorkspace.shared.frontmostApplication, app.processIdentifier != ProcessInfo.processInfo.processIdentifier {
+            targetApp=app
+            targetWindowID=HostKeyboard.frontWindow(pid:app.processIdentifier,bundle:app.bundleIdentifier)
+        }
     }
     func hotkey() {
         if state.busy || state.recording || startingVoice || pendingVoiceStart || transcriber != nil { stop(close: true); return }
@@ -541,7 +545,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let url=audioQueue.removeFirst(); transcribingURL=url
         let token=voiceGeneration; let epoch=audioEpoch; let process=Process(); let output=Pipe()
         process.executableURL=URL(fileURLWithPath:runtime.whisper)
-        process.arguments=["-m",runtime.model,"-f",url.path,"-l","en","-nt","-np","-t","4"]
+        process.arguments=["-m",runtime.model,"-f",url.path,"-l","en","-nt","-np","-t","4",
+                           "--prompt","Voice commands for a Mac. Open TextEdit. Write a sentence. Type hello world."]
         process.standardOutput=output; process.standardError=FileHandle.nullDevice
         transcriber=process
         if !state.busy { state.phase="Listening · transcribing" }
@@ -601,13 +606,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func interpretCommand() {
         guard let runtime else { fail("Local runtime is unavailable."); return }
+        rememberTarget()
         if !state.localInterpreter { resolvedGoal=originalGoal; launchCommand(originalGoal); return }
         refreshModels()
         guard state.qwenInstalled else { fail("Download Qwen in Settings to interpret this request."); showSettings(); return }
         guard desktopReady else { fail("Complete permission setup first."); setupPermissions(); return }
         state.completedAt = .distantPast; state.busy=true; state.phase="Understanding locally"; state.detail="Qwen is interpreting your request."
         let token=UUID(); generation=token
-        rememberTarget(); targetApp?.activate(options:[]); showPanel(key:false)
+        targetApp?.activate(options:[]); showPanel(key:false)
         DispatchQueue.main.asyncAfter(deadline:.now()+0.15) { [weak self] in
             guard let self, self.generation==token else { return }
             self.planner.interpret(runtime:runtime,goal:self.originalGoal,context:self.commands.context,dialogue:self.dialogue) { [weak self] plan in
@@ -649,7 +655,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         guard let runtime else { fail("Runtime unavailable. Rebuild with build.py."); return }
         guard desktopReady else { fail("Complete permission setup, then start listening again."); setupPermissions(); return }
         workerSucceeded=false;state.completedAt = .distantPast
-        rememberTarget(); activityWindow?.resignKey(); activityWindow?.orderOut(nil); targetApp?.activate(options:[])
+        activityWindow?.resignKey(); activityWindow?.orderOut(nil); targetApp?.activate(options:[])
         state.busy=true; state.step=0; state.cost=0; state.phase="Working"; state.detail="\(state.shortcutLabel) or Escape stops the run."
         let token=UUID(); generation=token
         let process=Process(); let output=Pipe(); let stdin=Pipe(); input=stdin
@@ -667,6 +673,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         process.currentDirectoryURL=URL(fileURLWithPath:runtime.root); task=process
         let authorization=originalGoal + dialogue.map { "\nClarification answer: " + ($0["answer"] ?? "") }.joined()
         var request: [String:Any] = ["goal":goal,"context":commands.context,"authorization":authorization]
+        if let targetApp,let targetWindowID {
+            request["target"]=["pid":Int(targetApp.processIdentifier),"window_id":targetWindowID,
+                               "app":targetApp.localizedName ?? ""]
+        }
         if let flightPlan { request["flight"]=flightPlan }
         do { try process.run(); let data=try JSONSerialization.data(withJSONObject:request); stdin.fileHandleForWriting.write(data+Data([10])) }
         catch { fail("Could not start the desktop helper."); return }
@@ -759,6 +769,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 fail("Could not open the requested folder.");return
             }
             DispatchQueue.main.asyncAfter(deadline:.now()+0.15) { [weak self] in self?.ack(token) }
+        case "host_text":
+            guard let pid=event["pid"] as? Int,let window=event["window_id"] as? Int,
+                  let front=NSWorkspace.shared.frontmostApplication,Int(front.processIdentifier)==pid,
+                  HostKeyboard.windowIsFront(window,pid:front.processIdentifier,bundle:front.bundleIdentifier),
+                  let text=event["text"] as? String,!text.isEmpty,text.utf16.count<=8000,
+                  let field=event["focus"] as? [String:Any] else {
+                fail("The target document changed before dictation. Nothing was typed.");return
+            }
+            do {
+                try HostKeyboard.insertText(text,spec:field,pid:front.processIdentifier,window:window,spacing:event["spacing"] as? Bool == true)
+                ack(token)
+            } catch { fail(error.localizedDescription) }
         case "host_key":
             guard let pid=event["pid"] as? Int,
                   let front=NSWorkspace.shared.frontmostApplication,Int(front.processIdentifier) == pid,

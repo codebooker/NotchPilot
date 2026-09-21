@@ -35,12 +35,64 @@ enum HostKeyboard {
     }
 
     static func windowIsFront(_ expected: Int, pid: pid_t, bundle: String?) -> Bool {
+        frontWindow(pid:pid,bundle:bundle)==expected
+    }
+
+    static func insertion(_ text: String, into before: String, range: NSRange, spacing: Bool) -> (text: String, result: String)? {
+        let original=before as NSString
+        guard range.location>=0,range.length>=0,range.location<=original.length,range.length<=original.length-range.location else { return nil }
+        var inserted=text
+        if spacing && range.length==0 && range.location>0 && !text.isEmpty {
+            let left=original.substring(to:range.location).last
+            let right=original.substring(from:range.location).first
+            // Add a boundary only after a word/sentence at the end of a word.
+            // Mid-word insertion and deliberate whitespace remain literal.
+            if let left,let first=text.first,!first.isWhitespace,
+               (first.isLetter || first.isNumber),
+               (left.isLetter || left.isNumber || ".!?;:,".contains(left)),
+               right == nil || right?.isWhitespace == true {
+                inserted=" "+text
+            }
+        }
+        return (inserted,original.replacingCharacters(in:range,with:inserted))
+    }
+
+    static func insertText(_ text: String, spec: [String:Any], pid: pid_t, window: Int, spacing: Bool) throws {
+        func problem(_ message:String) -> NSError { NSError(domain:"NotchPilot",code:1,userInfo:[NSLocalizedDescriptionKey:message]) }
+        guard focus(spec,pid:pid) else { throw problem("Could not focus the document. Nothing was typed.") }
+        let app=AXUIElementCreateApplication(pid)
+        guard let raw=attribute(app,kAXFocusedUIElementAttribute),CFGetTypeID(raw)==AXUIElementGetTypeID() else {
+            throw problem("The document lost focus. Nothing was typed.")
+        }
+        let field=raw as! AXUIElement
+        guard let before=attribute(field,kAXValueAttribute) as? String,
+              let rawRange=attribute(field,kAXSelectedTextRangeAttribute),CFGetTypeID(rawRange)==AXValueGetTypeID() else {
+            throw problem("This editor does not expose its insertion point. Nothing was typed.")
+        }
+        var selection=CFRange()
+        guard AXValueGetValue(rawRange as! AXValue,.cfRange,&selection),
+              let change=insertion(text,into:before,range:NSRange(location:selection.location,length:selection.length),spacing:spacing) else {
+            throw problem("The document selection changed. Nothing was typed.")
+        }
+        guard let front=NSWorkspace.shared.frontmostApplication,front.processIdentifier==pid,
+              windowIsFront(window,pid:pid,bundle:front.bundleIdentifier) else {
+            throw problem("The target document changed before dictation. Nothing was typed.")
+        }
+        guard AXUIElementSetAttributeValue(field,kAXSelectedTextAttribute as CFString,change.text as CFString) == .success else {
+            throw problem("This editor refused text insertion. The input was not retried.")
+        }
+        guard attribute(field,kAXValueAttribute) as? String == change.result else {
+            throw problem("Text entry could not be verified. Check the document; the input was not retried.")
+        }
+    }
+
+    static func frontWindow(pid: pid_t, bundle: String?) -> Int? {
         let rows=CGWindowListCopyWindowInfo([.optionOnScreenOnly,.excludeDesktopElements],kCGNullWindowID) as? [[String:Any]] ?? []
         let windows=rows.filter { row in
             guard row[kCGWindowOwnerPID as String] as? Int == Int(pid),row[kCGWindowLayer as String] as? Int == 0 else { return false }
             if ["com.google.Chrome","com.microsoft.edgemac"].contains(bundle ?? "") { return !(row[kCGWindowName as String] as? String ?? "").isEmpty }
             return true
         }
-        return windows.first?[kCGWindowNumber as String] as? Int == expected
+        return windows.first?[kCGWindowNumber as String] as? Int
     }
 }

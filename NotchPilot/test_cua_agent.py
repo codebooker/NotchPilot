@@ -151,7 +151,7 @@ class BatchTests(unittest.TestCase):
 
 
 class ControllerTests(unittest.IsolatedAsyncioTestCase):
-    async def scenario(self,decisions,preview=False,changed_surface=False,interrupt=False,recorded_calls=None,effect=None,new_document=False,goal_override=None,cancel_checkpoint=None,empty_observations=0):
+    async def scenario(self,decisions,preview=False,changed_surface=False,interrupt=False,recorded_calls=None,effect=None,new_document=False,goal_override=None,cancel_checkpoint=None,empty_observations=0,target=None,editable=False):
         calls=[] if recorded_calls is None else recorded_calls;events=[];requests=[];instances=[]
         class Driver:
             revision=0
@@ -166,13 +166,14 @@ class ControllerTests(unittest.IsolatedAsyncioTestCase):
                 if name=='hotkey' and args.get('keys')==['cmd','n']:self.new_window=True
                 if name=='list_windows' and new_document:
                     return {'windows':[{'window_id':20,'title':'Old document'}]+([{'window_id':21,'title':'New document'}] if self.new_window else [])}
+                if name=='list_windows' and target:return {'windows':[{'window_id':20,'title':'Current document'}]}
                 if name=='get_window_state':
                     self.revision+=1
                     if self.revision<=empty_observations:
                         return {'app_name':'Calculator','window_title':'Save','elements':[],'tree_markdown':''}
                     return {'app_name':'Calculator','window_title':'Calculator',
                         'tree_markdown':'- AXStaticText = "Unexpected dialog"' if changed_surface and self.revision>1 else '',
-                        'elements':[{'element_token':f's{self.revision}','label':'6','role':'AXTextArea' if new_document else 'AXButton'},
+                        'elements':[{'element_token':f's{self.revision}','label':'6','role':'AXTextArea' if new_document or editable else 'AXButton'},
                                     {'element_token':f't{self.revision}','label':'7','role':'AXButton'}]}
                 if name=='click':
                     if args['element_token'] not in (f's{self.revision}',f't{self.revision}'):raise RuntimeError('stale')
@@ -192,7 +193,7 @@ class ControllerTests(unittest.IsolatedAsyncioTestCase):
             if event=='host_key' and kw.get('key')=='n':instances[-1].new_window=True
         with tempfile.TemporaryDirectory() as directory,patch.dict(os.environ,{'OPENROUTER_API_KEY':'fake'},clear=True),patch.object(cua,'Driver',Driver),patch('worker.apps',return_value={'0':{'name':'Calculator'}}),patch.object(cua.httpx,'AsyncClient',client):
             goal=goal_override or ('Create a new document and type 6' if new_document else 'Click 6 in Calculator')
-            await cua.run(Path(directory),goal,lambda e,**kw:events.append((e,kw)),handshake,preview=preview)
+            await cua.run(Path(directory),goal,lambda e,**kw:events.append((e,kw)),handshake,preview=preview,target=target)
         return calls,events,requests
     async def test_fronts_exact_window_and_reobserves_after_click_without_jev(self):
         calls,events,requests=await self.scenario([{'action':'open_app','app':'Calculator'},
@@ -226,6 +227,45 @@ class ControllerTests(unittest.IsolatedAsyncioTestCase):
     async def test_completion_without_observation_is_rejected(self):
         with self.assertRaisesRegex(RuntimeError,'verify'):
             await self.scenario([{'action':'done','reason':'Trust me'}])
+    async def test_followup_starts_in_exact_current_window_without_launching_app(self):
+        calls,events,requests=await self.scenario([],goal_override='Write Hello world.',target={'app':'Calculator','pid':10,'window_id':20},editable=True)
+        self.assertNotIn('launch_app',[name for name,_ in calls])
+        self.assertTrue(events[-1][1]['success'])
+        self.assertEqual(requests,[])
+        self.assertTrue(all(args['window_id']==20 for name,args in calls if name=='get_window_state'))
+        text_events=[fields for event,fields in events if event=='host_text']
+        self.assertEqual(text_events[0]['text'],'Hello world.')
+        self.assertNotIn('type_text',[name for name,_ in calls])
+    async def test_closed_current_window_never_falls_back_to_other_document(self):
+        calls=[]
+        with self.assertRaisesRegex(RuntimeError,'closed or changed'):
+            await self.scenario([],goal_override='Write Hello.',target={'app':'Calculator','pid':10,'window_id':99},recorded_calls=calls)
+        self.assertNotIn('type_text',[name for name,_ in calls])
+    async def test_dictation_preview_does_not_insert_text(self):
+        _,events,requests=await self.scenario([],goal_override='Write Hello.',preview=True,
+            target={'app':'Calculator','pid':10,'window_id':20},editable=True)
+        self.assertFalse(events[-1][1]['success'])
+        self.assertNotIn('host_text',[name for name,_ in events])
+        self.assertEqual(requests,[])
+    async def test_exact_dictation_uses_user_words_without_model_or_auto_spacing(self):
+        _,events,requests=await self.scenario([],goal_override='Type exactly "Hello world."',
+            target={'app':'Calculator','pid':10,'window_id':20},editable=True)
+        event=next(fields for name,fields in events if name=='host_text')
+        self.assertEqual(event['text'],'Hello world.')
+        self.assertFalse(event['spacing'])
+        self.assertEqual(requests,[])
+    async def test_literal_dictation_does_not_select_all_existing_text(self):
+        with self.assertRaisesRegex(RuntimeError,'before replacing text'):
+            await self.scenario([{'action':'key','key':'select_all','element_token':'s1'}],
+                goal_override='Write Hello.',target={'app':'Calculator','pid':10,'window_id':20})
+    async def test_invalid_current_target_is_rejected(self):
+        for target in ([],{'pid':True,'window_id':20},{'pid':10,'window_id':0}):
+            with self.assertRaisesRegex(RuntimeError,'target is invalid'):
+                await self.scenario([],goal_override='Write Hello.',target=target)
+    async def test_explicit_different_app_overrides_current_window(self):
+        calls,_,_=await self.scenario([{'action':'done','reason':'Opened'}],goal_override='Open Calculator',
+            target={'app':'TextEdit','pid':11,'window_id':99})
+        self.assertIn('launch_app',[name for name,_ in calls])
     async def test_transient_empty_window_is_reobserved_before_model_decision(self):
         calls,events,requests=await self.scenario([{'action':'click','element_token':'s2'},
             {'action':'done','reason':'Verified'}],goal_override='Open Calculator',empty_observations=1)

@@ -8,6 +8,7 @@ from pathlib import Path
 from navigation import direct_navigation, urls_in, without_urls, browser_task
 from flights import prepare_flight
 from native_browser import recipe_task
+from dictation import dictated_text
 
 MODEL_REPO='mlx-community/Qwen3-1.7B-4bit'
 MODEL_REVISION='3b1b1768f8f8cf8351c712464f906e86c2b8269e'
@@ -89,7 +90,8 @@ def observation():
     window=_ax_attr(element,AS.kAXFocusedWindowAttribute)
     focused=_ax_attr(element,AS.kAXFocusedUIElementAttribute)
     result={'app':str(app.localizedName()),'window':str(_ax_attr(window,'AXTitle') or '')[:300],
-            'document':str(_ax_attr(window,'AXDocument') or '')[:500],'selected':[]}
+            'document':str(_ax_attr(window,'AXDocument') or '')[:500],
+            'focused_role':str(_ax_attr(focused,'AXRole') or ''),'selected':[]}
     # Traverse only a bounded window tree to locate explicit selection attributes.
     todo=[v for v in [focused,window] if v is not None];visited=0;deadline=time.monotonic()+1
     while todo and visited<80 and time.monotonic()<deadline:
@@ -125,6 +127,8 @@ class Interpreter:
         from mlx_lm import generate
         from mlx_lm.sample_utils import make_sampler
         request=validate_request(request)
+        if not request['dialogue'] and dictated_text(request['goal']) is not None:
+            return {'action':'execute','goal':request['goal'],'question':'','seconds':0}
         flight=prepare_flight(request)
         if flight: return {**flight,'seconds':0}
         if not request['dialogue'] and (recipe_task(request['goal']) or browser_task(request['goal'])):
@@ -147,7 +151,7 @@ class Interpreter:
         explicit_selection=any(str(name).casefold() in latest.casefold() for name in selected)
         if singular_reference and len(selected)>1 and not explicit_selection and not re.search(r'\b(both|all|them|these|those)\b',latest,re.I):
             return {'action':'clarify','goal':'','question':'Which selected item do you mean: '+', '.join(str(v)[:80] for v in selected[:4])+'?','seconds':0}
-        if singular_reference and not selected and not observed.get('document') and not request['context'] and not request['dialogue']:
+        if singular_reference and not selected and not observed.get('document') and observed.get('focused_role')!='AXTextArea' and not request['context'] and not request['dialogue']:
             return {'action':'clarify','goal':'','question':'Which app, file, or folder do you mean?','seconds':0}
         payload={'goal':request['goal'],'context':request['context'],'observation':observed}
         messages=[{'role':'system','content':RULES}]
