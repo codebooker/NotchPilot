@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="680" viewBox="0 0 1280 680" fill="none">
+<title>NotchPilot — your Mac, your words</title>
+<desc>Interface illustration of the dark voice strip, a Calculator result, and the lavender NotchPilot cursor.</desc>
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1280" y2="680" gradientUnits="userSpaceOnUse"><stop stop-color="#102320"/><stop offset=".56" stop-color="#0c131b"/><stop offset="1" stop-color="#1b1529"/></linearGradient>
+  <linearGradient id="panel" x1="672" y1="110" x2="1198" y2="550" gradientUnits="userSpaceOnUse"><stop stop-color="#17272c"/><stop offset="1" stop-color="#111820"/></linearGradient>
+  <radialGradient id="glow"><stop stop-color="#8de5c4" stop-opacity=".12"/><stop offset="1" stop-color="#8de5c4" stop-opacity="0"/></radialGradient>
+  <filter id="shadow" x="-40%" y="-40%" width="180%" height="190%"><feDropShadow dx="0" dy="14" stdDeviation="18" flood-opacity=".32"/></filter>
+</defs>
+<rect width="1280" height="680" rx="28" fill="url(#bg)"/>
+<ellipse cx="962" cy="286" rx="352" ry="308" fill="url(#glow)"/>
+<rect x="1" y="1" width="1278" height="678" rx="27" stroke="#d9fff4" stroke-opacity=".12"/>
+<g font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif">
+  <rect x="60" y="54" width="42" height="42" rx="15" fill="#8de5c4"/>
+  <path d="M75 69v10m12-10v10" stroke="#183632" stroke-width="4" stroke-linecap="round" transform="rotate(-8 81 74)"/>
+  <text x="117" y="83" fill="#eef7f3" font-size="27" font-weight="650">NotchPilot</text>
+  <text x="62" y="158" fill="#8de5c4" font-size="12" font-weight="650" letter-spacing="3">VOICE-FIRST MAC AUTOMATION</text>
+  <text x="58" y="248" fill="#f1f6f4" font-size="80" font-weight="650" letter-spacing="-3">Your Mac.</text>
+  <text x="58" y="335" fill="#8de5c4" font-size="80" font-weight="650" letter-spacing="-3">Your words.</text>
+  <text x="62" y="393" fill="#b1c3c6" font-size="21">Press a shortcut. Say what you need.</text>
+  <text x="62" y="425" fill="#b1c3c6" font-size="21">Watch your Mac get to work.</text>
+  <rect x="62" y="478" width="144" height="43" rx="12" fill="#8de5c4"/>
+  <text x="83" y="506" fill="#10231f" font-size="17" font-weight="650">⌃ ⌥ Space</text>
+  <text x="225" y="505" fill="#d3dfdf" font-size="15">Open. Speak. Go.</text>
+  <text x="62" y="607" fill="#839b9e" font-size="14">LOCAL SPEECH</text>
+  <circle cx="196" cy="602" r="2" fill="#667777"/>
+  <text x="213" y="607" fill="#839b9e" font-size="14">VISIBLE ACTIONS</text>
+  <circle cx="366" cy="602" r="2" fill="#667777"/>
+  <text x="384" y="607" fill="#839b9e" font-size="14">DARK BY CHOICE</text>
+
+  <g filter="url(#shadow)">
+    <rect x="660" y="112" width="554" height="450" rx="24" fill="url(#panel)" stroke="#a9cbc5" stroke-opacity=".18"/>
+    <path d="M879 112h116v12a11 11 0 0 1-11 11h-94a11 11 0 0 1-11-11z" fill="#080d11"/>
+    <rect x="797" y="148" width="280" height="44" rx="17" fill="#0e1618" stroke="#ffffff" stroke-opacity=".18"/>
+    <rect x="809" y="158" width="24" height="24" rx="9" fill="#8de5c4"/>
+    <path d="M817 166v6m8-6v6" stroke="#163530" stroke-width="2.5" stroke-linecap="round"/>
+    <g stroke="#a1efcf" stroke-width="3" stroke-linecap="round">
+      <path d="M852 167v6m7-10v14m7-18v22m7-16v10m7-15v20m7-22v24m7-17v10m7-14v18m7-21v24m7-16v8m7-13v18m7-11v5"/>
+    </g>
+    <circle cx="1024" cy="170" r="5" stroke="#b9c6c8" stroke-width="1.5"/>
+    <path d="M1051 166l8 8m0-8-8 8" stroke="#b9c6c8" stroke-width="1.5" stroke-linecap="round"/>
+
+    <rect x="708" y="234" width="256" height="282" rx="15" fill="#1e292e" stroke="#ffffff" stroke-opacity=".10"/>
+    <circle cx="726" cy="252" r="4" fill="#ed6b66"/><circle cx="741" cy="252" r="4" fill="#edc265"/><circle cx="756" cy="252" r="4" fill="#77c693"/>
+    <text x="934" y="283" text-anchor="end" fill="#a5b7b9" font-size="15">6 × 7</text>
+    <text x="936" y="335" text-anchor="end" fill="#f1f7f4" font-size="53" font-weight="300">42</text>
+    <g fill="#354148"><rect x="725" y="355" width="48" height="34" rx="9"/><rect x="783" y="355" width="48" height="34" rx="9"/><rect x="841" y="355" width="48" height="34" rx="9"/><rect x="725" y="400" width="48" height="34" rx="9"/><rect x="783" y="400" width="48" height="34" rx="9"/><rect x="841" y="400" width="48" height="34" rx="9"/><rect x="725" y="445" width="106" height="34" rx="9"/><rect x="841" y="445" width="48" height="34" rx="9"/></g>
+    <g fill="#627669"><rect x="899" y="355" width="48" height="34" rx="9"/><rect x="899" y="400" width="48" height="34" rx="9"/></g>
+    <rect x="899" y="445" width="48" height="34" rx="9" fill="#8de5c4"/>
+    <g fill="#e3e9e6" font-size="17" text-anchor="middle"><text x="749" y="378">7</text><text x="807" y="378">8</text><text x="865" y="378">9</text><text x="923" y="378">×</text><text x="749" y="423">4</text><text x="807" y="423">5</text><text x="865" y="423">6</text><text x="923" y="423">+</text><text x="778" y="468">0</text><text x="865" y="468">.</text></g>
+    <text x="923" y="468" fill="#12312a" font-size="20" text-anchor="middle">=</text>
+    <path d="M939 469q-3-8 5-5l24 11q7 3 0 6l-11 4-5 11q-3 6-6-1z" fill="#b18af5" stroke="#f5edff" stroke-width="2"/>
+    <path d="M935 458q-9 0-10 9m10-15q-15 0-16 15" stroke="#b18af5" stroke-width="2" stroke-linecap="round"/>
+    <rect x="966" y="493" width="154" height="26" rx="13" fill="#2b263f" stroke="#b18af5"/>
+    <circle cx="980" cy="506" r="3" fill="#b18af5"/>
+    <text x="990" y="510" fill="#f4effb" font-size="11" font-weight="600">NotchPilot</text>
+    <rect x="1062" y="497" width="20" height="18" rx="5" fill="#9c79d8"/>
+    <path d="M1067 501h8v8h-8zm3 3h8v8h-8" stroke="#fff" stroke-width="1"/>
+    <rect x="1087" y="497" width="20" height="18" rx="5" stroke="#9c79d8"/>
+    <rect x="1092" y="502" width="10" height="8" rx="1" stroke="#eee5fb"/>
+  </g>
+  <rect x="735" y="585" width="405" height="44" rx="22" fill="#152b28" stroke="#8de5c4" stroke-opacity=".2"/>
+  <text x="937" y="613" text-anchor="middle" fill="#d7eee4" font-size="17">“Multiply six by seven.”</text>
+</g>
+</svg>

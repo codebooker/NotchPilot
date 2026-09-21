@@ -1,18 +1,22 @@
-# Build and Release Folders
-bin-debug/
-bin-release/
-[Oo]bj/
-[Bb]in/
+# Credentials and machine-local configuration
+.env
+.env.*
+!.env.example
+*.p12
+*.p8
+*.key
+*.mobileprovision
 
-# Other files and folders
-.settings/
-
-# Executables
-*.swf
-*.air
-*.ipa
-*.apk
-
-# Project files, i.e. `.project`, `.actionScriptProperties` and `.flexProperties`
-# should NOT be excluded as they contain compiler settings and other important
-# information for Eclipse / Flash Builder.
+# Runtime dependencies, model weights, generated app bundles, and traces
+.cache/
+.venv/
+NotchPilot/build/
+build/
+*.app/
+*.dmg
+*.wav
+*.aiff
+*.log
+__pycache__/
+*.py[cod]
+.DS_Store

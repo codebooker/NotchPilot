@@ -1,0 +1,4 @@
+# Model-free unit test dependencies for macOS + Python 3.12.
+httpx==0.28.1
+python-dotenv==1.2.3
+typesafe-computer-use @ git+https://github.com/awlevin/typesafe-computer-use.git@cc7b5066ae1a07b5e3182e8f87a9b5b6dfdcffc1
