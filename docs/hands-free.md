@@ -69,6 +69,12 @@ A signed helper loads Whisper **base.en** once and stays resident. Requests trav
 
 Dictation remains active across pauses. An individual unbroken phrase may last up to 120 seconds; command mode retains its 30-second bound. Overlong phrases are discarded through the next pause rather than executed partially. This is phrase-based dictation, not live partial-word streaming. A local Silero VAD classifier now decides which 32 ms frames contain speech; your selected pause decides when that speech becomes a phrase. See [speech detection](speech-detection.md).
 
+**Sentences survive pauses.** While dictating, Whisper decodes each phrase with the text before your cursor (and any phrases still waiting to be typed) as context. “A little boy rode his” … “purple bike” now arrives as “purple bike.” rather than “Purple bike.”, and when a phrase continues in lowercase, the period Whisper added to the previous phrase is removed: the document reads “A little boy rode his purple bike.” Scratch that restores the period with the phrase. This only happens at the end of NotchPilot's own last phrase; a period you typed is never touched. See the [prompt measurements](../NotchPilot/experiments/results/whisper-prompt.json).
+
+**Words to recognize.** Settings → Everyday has a comma-separated vocabulary for names and jargon. It steers Whisper in both modes and fixes the casing of exact matches: in the synthesized test, “notch pilot … kubernetes” became “NotchPilot … Kubernetes”.
+
+**Noise labels are dropped.** Whisper marks non-speech as `[BLANK_AUDIO]`, `(water splashing)`, `*gunshot*`, or `♪`; none of these becomes text or a request. Near-silence sometimes decodes as “You” or “Thank you.”; in command mode those phrases are ignored. In dictation they are kept, because you might mean them.
+
 ## Verified in this development pass
 
 - Live TextEdit: multiple phrases, new paragraph, unique selection/replacement, punctuation on correction commands, and scratch restoration.
@@ -78,7 +84,7 @@ Dictation remains active across pauses. An individual unbroken phrase may last u
 - An existing destination was refused and its SHA-256 remained unchanged.
 - Native tests cover cancellation, timeout, queues, mode commands, selection ranges, Unicode offsets, and long phrase segmentation.
 
-**Background-speech limitation:** during the live-microphone session, unrelated ambient speech was also inserted into the disposable document. The session was stopped and the fixture restored. There is no speaker identification or media-speech rejection; use sleep mode when other speech should be ignored.
+**Background-speech limitation:** during live-microphone sessions, unrelated speech in the room was transcribed, once into a disposable document and once merged with a test command. There is no speaker identification. Use sleep mode when other speech should be ignored. The experimental **Ignore quieter voices** setting learns the level of your phrases and ignores phrases more than 12 dB quieter, such as a TV or someone across the room; it has not been validated in real rooms, and a nearby voice at your volume still gets through.
 
 The controlled desktop trials submitted transcripts through the app's typed command field. The same instruction handler accepts microphone transcripts, but these trials are not a substitute for testing real microphones, accents, speech impairments, or noisy rooms. A separate base.en audio replay verified persistent recognition and invalid-file recovery. See [Testing](testing.md).
 

@@ -2,6 +2,7 @@
 #include "whisper.h"
 #include "common-whisper.h"
 #include "json.hpp"
+#include <algorithm>
 #include <chrono>
 #include <iostream>
 #include <string>
@@ -28,16 +29,27 @@ int main(int argc, char **argv) {
             p.n_threads = 4; p.language = "en"; p.no_context = true;
             p.print_realtime = false; p.print_progress = false;
             p.print_timestamps = false; p.print_special = false;
-            // No command bias in continuous dictation: preserve the user's prose.
-            std::string prompt = request.value("dictation", false) ? "" :
-                "Voice commands for a Mac. Open TextEdit. Write a sentence. Type hello world.";
+            // The host supplies vocabulary and, while dictating, the text before the caret.
+            // Without one, commands get a small bias and dictation none, to preserve prose.
+            std::string prompt = request.value("prompt", std::string());
+            if (prompt.size() > 8000) throw std::runtime_error("Prompt too long");
+            if (prompt.empty() && !request.value("dictation", false))
+                prompt = "Voice commands for a Mac. Open TextEdit. Write a sentence. Type hello world.";
             p.initial_prompt = prompt.c_str();
             if (whisper_full(ctx, p, audio.data(), (int)audio.size()) != 0)
                 throw std::runtime_error("Transcription failed");
-            std::string text;
-            for (int i = 0; i < whisper_full_n_segments(ctx); ++i) text += whisper_full_get_segment_text(ctx, i);
+            std::string text; double probability = 0; int tokens = 0; float no_speech = 0;
+            for (int i = 0; i < whisper_full_n_segments(ctx); ++i) {
+                text += whisper_full_get_segment_text(ctx, i);
+                no_speech = std::max(no_speech, whisper_full_get_segment_no_speech_prob(ctx, i));
+                for (int j = 0; j < whisper_full_n_tokens(ctx, i); ++j) {
+                    if (whisper_full_get_token_id(ctx, i, j) >= whisper_token_eot(ctx)) continue; // special tokens
+                    probability += whisper_full_get_token_p(ctx, i, j); ++tokens;
+                }
+            }
             double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();
-            std::cout << json({{"event","transcript"},{"id",id},{"text",text},{"seconds",seconds}}).dump() << std::endl;
+            std::cout << json({{"event","transcript"},{"id",id},{"text",text},{"seconds",seconds},
+                               {"confidence", tokens ? probability / tokens : 0.0},{"no_speech",no_speech}}).dump() << std::endl;
         } catch (...) {
             std::cout << json({{"event","error"},{"id",id},{"text","Local speech recognition failed."}}).dump() << std::endl;
         }

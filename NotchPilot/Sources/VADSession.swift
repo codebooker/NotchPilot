@@ -15,8 +15,10 @@ final class VADSession: SpeechFrameClassifier {
     private var runtime: Runtime?
 
     func prepare(_ runtime: Runtime) throws {
-        self.runtime = runtime
-        if process?.isRunning != true { try start(runtime) }
+        try lock.withLock {
+            self.runtime = runtime
+            if process?.isRunning != true { try start(runtime) }
+        }
     }
 
     func classify(_ frame: [Float], deliverOn queue: DispatchQueue, completion: @escaping (Result<Float, Error>) -> Void) {
@@ -24,26 +26,33 @@ final class VADSession: SpeechFrameClassifier {
             completion(.failure(NSError(domain: "VAD", code: 1, userInfo: [NSLocalizedDescriptionKey: "Speech detector received an invalid audio frame."])))
             return
         }
+        var queued = false
         do {
-            guard let runtime else { throw NSError(domain:"VAD",code:2,userInfo:[NSLocalizedDescriptionKey:"Speech detector is not prepared."]) }
-            try prepare(runtime)
-            lock.lock(); callbacks.append(Callback(queue:queue,action:completion)); lock.unlock()
+            // Process state is shared with the reader thread and main; the write stays outside the
+            // lock so a full pipe cannot block the reader that drains it.
+            let input: Pipe = try lock.withLock {
+                guard let runtime else { throw NSError(domain:"VAD",code:2,userInfo:[NSLocalizedDescriptionKey:"Speech detector is not prepared."]) }
+                if process?.isRunning != true { try start(runtime) }
+                guard let input else { throw NSError(domain: "VAD", code: 2, userInfo: [NSLocalizedDescriptionKey: "Speech detector is unavailable."]) }
+                callbacks.append(Callback(queue:queue,action:completion)); queued = true
+                return input
+            }
             var data = Data([70]) // F
             frame.withUnsafeBytes { data.append(contentsOf: $0) }
-            guard let input else { throw NSError(domain: "VAD", code: 2, userInfo: [NSLocalizedDescriptionKey: "Speech detector is unavailable."]) }
             try input.fileHandleForWriting.write(contentsOf: data)
         } catch {
-            lock.lock(); _ = callbacks.popLast(); lock.unlock()
+            if queued { lock.withLock { _ = callbacks.popLast() } }
             completion(.failure(error))
         }
     }
 
     /// Ordered after already-written frames, so the next utterance starts with a clean LSTM state.
     func reset() {
-        guard process?.isRunning == true, let input else { return }
-        try? input.fileHandleForWriting.write(contentsOf: Data([82])) // R
+        let running: Pipe? = lock.withLock { process?.isRunning == true ? input : nil }
+        try? running?.fileHandleForWriting.write(contentsOf: Data([82])) // R
     }
 
+    /// Call with `lock` held.
     private func start(_ runtime: Runtime) throws {
         let token = UUID(); lifetime = token; sawReady = false; outputBuffer.removeAll()
         let child = Process(); let stdout = Pipe(); let stdin = Pipe()

@@ -337,6 +337,17 @@ struct PreferencesView: View {
                         .font(.system(size:13)).foregroundStyle(PilotStyle.secondary)
                 }
                 Divider()
+                VStack(alignment:.leading,spacing:8) {
+                    Text("Words to recognize").font(.system(size:14,weight:.medium))
+                    TextField("For example: NotchPilot, Kubernetes, Siobhan",text:$state.vocabularyText).textFieldStyle(.roundedBorder)
+                    Text("Names and jargon, separated by commas. Or spell a word aloud, then say “add that to vocabulary.”")
+                        .font(.system(size:13)).foregroundStyle(PilotStyle.secondary)
+                }
+                Divider()
+                Toggle("Ignore quieter voices",isOn:$state.ignoreQuieterVoices).toggleStyle(.switch)
+                Text("Experimental. After a few phrases, speech much quieter than yours, like a TV or someone across the room, is ignored. It can’t tell who is speaking.")
+                    .font(.system(size:13)).foregroundStyle(PilotStyle.secondary)
+                Divider()
                 HStack {
                     Label("Your shortcut",systemImage:"keyboard")
                     Spacer();Text(state.shortcutLabel).font(.system(size:14,weight:.semibold))

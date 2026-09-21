@@ -19,7 +19,7 @@ final class SpeechCapture {
     var running = false
     var segmentEpoch = UUID()
     var lastMeter = Date.distantPast
-    var onSegment: ((URL, UUID) -> Void)?
+    var onSegment: ((URL, UUID, Double?) -> Void)?
     var onLevel: ((CGFloat) -> Void)?
     var onVoiceActivity: (() -> Void)?
     var onError: ((String) -> Void)?
@@ -107,7 +107,7 @@ final class SpeechCapture {
     private func consume(_ samples:[Float],speech:Bool) {
         if speech { onVoiceActivity?() }
         if let completed=segmenter?.append(samples,speech:speech) {
-            do { onSegment?(try Self.write(completed,sampleRate:16000),segmentEpoch) }
+            do { onSegment?(try Self.write(completed,sampleRate:16000),segmentEpoch,segmenter?.lastLevel) }
             catch { onError?("Could not prepare speech for local Whisper.") }
             vad?.reset()
         }

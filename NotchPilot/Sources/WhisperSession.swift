@@ -12,12 +12,14 @@ final class WhisperSession {
 
     func prepare(_ runtime: Runtime) throws { if process?.isRunning != true { try start(runtime) } }
 
-    func transcribe(runtime: Runtime, url: URL, dictation: Bool, completion: @escaping (Result<String,Error>) -> Void) {
+    func transcribe(runtime: Runtime, url: URL, dictation: Bool, prompt: String = "", completion: @escaping (Result<String,Error>) -> Void) {
         let id=UUID().uuidString
         do {
             if process?.isRunning != true { try start(runtime) }
             callbacks[id]=completion
-            let data=try JSONSerialization.data(withJSONObject:["id":id,"path":url.path,"dictation":dictation])
+            var request:[String:Any]=["id":id,"path":url.path,"dictation":dictation]
+            if !prompt.isEmpty { request["prompt"]=prompt }
+            let data=try JSONSerialization.data(withJSONObject:request)
             guard let input else { throw VoiceEditor.problem("The speech engine is unavailable. Try again.") }
             try input.fileHandleForWriting.write(contentsOf:data+Data([10]))
             let token=lifetime

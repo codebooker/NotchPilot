@@ -62,6 +62,27 @@ For a rendered cursor preview:
 NotchPilot/build/session-tests --cursor-preview /tmp/notchpilot-cursor.png
 ```
 
+## Live QA inbox (developer only)
+
+Launch with `--qa-inbox DIR` to drive the real app without a microphone. Each `DIR/*.cmd` file (processed in name order, then deleted) is submitted exactly like the typed command field, and `DIR/status.json` mirrors the phase, detail, dictation state, and last command. Add `--qa-listen` to also start the microphone; room audio will then be transcribed, so avoid it where other people are talking.
+
+```sh
+open NotchPilot/build/NotchPilot.app --args --qa-inbox /tmp/np-qa
+printf 'Start dictating.' > /tmp/np-qa/01.cmd
+```
+
+Use disposable documents. Read results from the target app, not only from `status.json`.
+
+## Whisper prompt evaluation
+
+```sh
+.cache/notch-venv/bin/python NotchPilot/experiments/eval_whisper_prompt.py \
+  --session NotchPilot/build/NotchPilot.app/Contents/Resources/whisper-session \
+  --model .cache/whisper-models/ggml-base.en.bin --output /tmp/whisper-prompt.json
+```
+
+Synthesizes clips with `say` and system sounds, then decodes them with and without a prompt: sentence continuity, vocabulary, spelled letters, and noise labels. Synthesized speech is a sanity check, not a microphone study.
+
 ## Local interpreter evaluation
 
 After downloading Qwen in the app:

@@ -33,11 +33,53 @@ import Foundation
         precondition(!VoiceEditCommand.parse("Save as My Note.txt on my desktop")!.isProse(in:bike))
         precondition(!VoiceEditCommand.parse("Save as /tmp/name.")!.isProse(in:bike))
         precondition(!VoiceEditCommand.scratch.isProse(in:""))
+        // Whisper labels non-speech in several styles; none of it may become text or a request.
+        for noise in ["[BLANK_AUDIO]","(water splashing)","*gunshot*","[ Sound Effects ]","♪ ♪","[Music] (applause)","  "] {
+            precondition(SpeechText.isNonSpeech(noise),noise)
+        }
+        for speech in ["Hello (laughs)","Thank you.","5","*really* good"] { precondition(!SpeechText.isNonSpeech(speech),speech) }
+        for phantom in ["You","Thank you.","Thanks for watching!"] {
+            precondition(SpeechText.isNonSpeech(phantom,dictation:false),"Whisper's classic silence hallucinations are not commands")
+            precondition(!SpeechText.isNonSpeech(phantom,dictation:true),"…but may be real dictation")
+        }
+        let commandPrompt="Voice commands for a Mac. Open TextEdit. Write a sentence. Type hello world."
+        precondition(SpeechText.prompt(dictation:false,vocabulary:[],context:"ignored")==commandPrompt)
+        precondition(SpeechText.prompt(dictation:false,vocabulary:["NotchPilot","Kubernetes"],context:"")==commandPrompt+" Vocabulary: NotchPilot, Kubernetes.")
+        precondition(SpeechText.prompt(dictation:true,vocabulary:[],context:"")=="","Dictation without context keeps Whisper unbiased")
+        precondition(SpeechText.prompt(dictation:true,vocabulary:["NotchPilot"],context:"A little boy rode his")=="NotchPilot. A little boy rode his")
+        let bounded=SpeechText.prompt(dictation:true,vocabulary:[],context:String(repeating:"word ",count:400)+"tail end")
+        precondition(bounded.count<=600 && bounded.hasPrefix("word") && bounded.hasSuffix("tail end"),"Context is the latest text, starting on a word")
+        precondition(SpeechText.applyVocabulary("open notchpilot and kubernetes",["NotchPilot","Kubernetes"])=="open NotchPilot and Kubernetes")
+        precondition(SpeechText.applyVocabulary("notchpilots",["NotchPilot"])=="notchpilots","Only whole words")
+        let rode=DictationEdit(pid:1,window:2,field:AXUIElementCreateSystemWide(),before:"",after:"A little boy rode his.",
+                               range:NSRange(location:0,length:0),inserted:"A little boy rode his.")
+        precondition(VoiceEditor.joinsSentence("purple bike.",value:rode.after,selection:NSRange(location:22,length:0),previous:rode),
+                     "A lowercase continuation replaces the period Whisper added to the previous phrase")
+        precondition(!VoiceEditor.joinsSentence("Purple bike.",value:rode.after,selection:NSRange(location:22,length:0),previous:rode))
+        precondition(!VoiceEditor.joinsSentence("purple bike.",value:rode.after+" ",selection:NSRange(location:23,length:0),previous:rode),"Edited text is left alone")
+        precondition(!VoiceEditor.joinsSentence("purple bike.",value:rode.after,selection:NSRange(location:10,length:0),previous:rode),"Only at the end of the last phrase")
+        let question=DictationEdit(pid:1,window:2,field:AXUIElementCreateSystemWide(),before:"",after:"Is it blue?",
+                                   range:NSRange(location:0,length:0),inserted:"Is it blue?")
+        precondition(!VoiceEditor.joinsSentence("or red?",value:question.after,selection:NSRange(location:11,length:0),previous:question),"Only a period")
+        precondition(QAInbox(arguments:["NotchPilot"])==nil,"QA automation is off unless explicitly launched with --qa-inbox")
+        let inboxDirectory=FileManager.default.temporaryDirectory.appendingPathComponent("qa-"+UUID().uuidString)
+        try FileManager.default.createDirectory(at:inboxDirectory,withIntermediateDirectories:true)
+        for name in ["02-b.cmd","01-a.cmd","status.json","notes.txt"] { try Data("x".utf8).write(to:inboxDirectory.appendingPathComponent(name)) }
+        precondition(QAInbox(arguments:["NotchPilot","--qa-inbox",inboxDirectory.path])?.directory.path==inboxDirectory.path)
+        precondition(QAInbox.pending(in:inboxDirectory).map(\.lastPathComponent)==["01-a.cmd","02-b.cmd"],"Only .cmd files, in name order")
+        try? FileManager.default.removeItem(at:inboxDirectory)
         precondition(VoiceEditor.uniqueRange("cat",in:"A CAT") == NSRange(location:2,length:3))
         precondition(VoiceEditor.uniqueRange("cat",in:"cat cat")==nil)
         precondition(VoiceEditor.uniqueRange("missing",in:"text")==nil)
         precondition(VoiceEditor.uniqueRange("hi",in:"😀 hi") == NSRange(location:3,length:2))
         do { _=try SaveRecovery.destination("relative.txt");preconditionFailure("Relative save must not guess a folder") } catch {}
+        // Verification compares file identity: /tmp is a symlink to /private/tmp, and path standardization
+        // strips /private only once a file exists, so string comparison failed for saves under /tmp.
+        let savedFile=URL(fileURLWithPath:"/private/tmp/notchpilot-same-\(UUID().uuidString).rtf")
+        try Data("x".utf8).write(to:savedFile)
+        precondition(SaveRecovery.sameFile(URL(string:"file:///tmp/"+savedFile.lastPathComponent)!,savedFile),"The same file through a symlinked folder")
+        precondition(!SaveRecovery.sameFile(savedFile,URL(fileURLWithPath:"/private/tmp/notchpilot-missing.rtf")),"A missing file never verifies")
+        try? FileManager.default.removeItem(at:savedFile)
         precondition(HostKeyboard.codes["arbitrary_command"]==nil)
         precondition(HostKeyboard.insertion("Next sentence.",into:"First.",range:NSRange(location:6,length:0),spacing:true)?.result=="First. Next sentence.")
         precondition(HostKeyboard.insertion("Next",into:"First. ",range:NSRange(location:7,length:0),spacing:true)?.result=="First. Next")

@@ -65,6 +65,16 @@ import AVFoundation
         precondition(queue.next()=="Go to Documents")
         queue.finish(success:false)
         precondition(queue.next()==nil,"Failure must stop dependent follow-ups")
+        // A phrase's level comes from its speech frames only, so the closing pause does not dilute it.
+        var measured=SpeechSegmenter(sampleRate:16000)
+        for _ in 0..<5 { _=measured.append(voice,speech:true) }
+        for _ in 0..<15 { _=measured.append(silence,speech:false) }
+        precondition(abs((measured.lastLevel ?? 0) - (-20)) < 0.1,"0.1 RMS speech is -20 dBFS")
+        var gate=VoiceLevelGate()
+        precondition(gate.accepts(-40),"Nothing is ignored before your level is known")
+        for level in [-20.0,-22,-18] { precondition(gate.accepts(level)) }
+        precondition(!gate.accepts(-38),"A voice far quieter than yours is ignored")
+        precondition(gate.accepts(-28),"Speaking a little more softly is still you")
         var dictation=VoiceCommandQueue()
         precondition(dictation.enqueue("Replace missing with text")); precondition(dictation.enqueue("Next sentence."))
         _=dictation.next(); dictation.skipActive()

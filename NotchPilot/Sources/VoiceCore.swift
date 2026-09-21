@@ -26,6 +26,10 @@ struct SpeechSegmenter {
     var active = false
     var overflow = false
     var discarding = false
+    /// Level of the last completed phrase in dBFS, measured over its speech frames only.
+    private(set) var lastLevel: Double?
+    private var speechEnergy: Double = 0
+    private var speechSamples = 0
 
     /// `speech` comes from the resident Silero VAD, not a volume threshold.
     mutating func append(_ samples: [Float], speech: Bool) -> [Float]? {
@@ -41,12 +45,16 @@ struct SpeechSegmenter {
         }
         if active {
             utterance.append(contentsOf: samples)
-            if speech { voiced += seconds; silent = 0 } else { silent += seconds }
+            if speech {
+                voiced += seconds; silent = 0
+                speechEnergy += samples.reduce(0.0) { $0 + Double($1 * $1) }; speechSamples += samples.count
+            } else { silent += seconds }
             if Double(utterance.count) / sampleRate > maxDuration {
                 overflow = true; reset(); discarding = true; return nil // Discard through the next pause.
             }
             if silent >= pause {
                 let result = voiced >= 0.25 ? utterance : nil
+                if result != nil { lastLevel = 10 * log10(max(speechEnergy / Double(max(1, speechSamples)), 1e-12)) }
                 reset(); return result
             }
         } else {
@@ -58,7 +66,22 @@ struct SpeechSegmenter {
     }
     mutating func reset() {
         utterance.removeAll(); lead.removeAll(); voiced = 0; silent = 0; active = false
+        speechEnergy = 0; speechSamples = 0
         if let nextPause { pause=nextPause; self.nextPause=nil }
+    }
+}
+
+/// Opt-in "ignore quieter voices": learns the usual level of your phrases and ignores phrases far
+/// quieter, such as a television or someone across the room. It does not identify speakers.
+struct VoiceLevelGate {
+    private(set) var levels: [Double] = []
+    let margin = 12.0
+    mutating func accepts(_ level: Double) -> Bool {
+        if levels.count >= 3 {
+            let sorted = levels.sorted()
+            if level < sorted[sorted.count / 2] - margin { return false }
+        }
+        levels.append(level); levels = Array(levels.suffix(20)); return true
     }
 }
 

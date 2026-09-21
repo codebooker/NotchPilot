@@ -23,3 +23,7 @@ python3 NotchPilot/experiments/eval_vad_session.py \
 ```
 
 The implementation uses the VAD API and model delivery path documented by [whisper.cpp](https://github.com/ggml-org/whisper.cpp#voice-activity-detection-vad). Recheck the upstream model terms before distributing a standalone installer.
+
+## Quieter voices (experimental, off by default)
+
+Each completed phrase gets a level in dBFS, measured over its speech frames only so the closing pause does not dilute it. After three phrases, **Ignore quieter voices** drops any phrase more than 12 dB below the median of your recent accepted phrases, before transcription. Only accepted phrases are learned. This is a loudness heuristic: it cannot tell who is speaking, and it has only been checked with synthetic levels, not real rooms.

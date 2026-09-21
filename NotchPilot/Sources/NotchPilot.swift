@@ -66,6 +66,16 @@ final class PilotState: ObservableObject {
         didSet { UserDefaults.standard.set(localInterpreter,forKey:"localInterpreter") }
     }
     @Published var dictating = false
+    @Published var ignoreQuieterVoices = UserDefaults.standard.bool(forKey:"ignoreQuieterVoices") {
+        didSet { UserDefaults.standard.set(ignoreQuieterVoices,forKey:"ignoreQuieterVoices") }
+    }
+    /// Comma-separated words that Whisper should spell your way, such as names and jargon.
+    @Published var vocabularyText = UserDefaults.standard.string(forKey:"vocabulary") ?? "" {
+        didSet { UserDefaults.standard.set(vocabularyText,forKey:"vocabulary") }
+    }
+    var vocabulary: [String] {
+        vocabularyText.split(separator:",").map { $0.trimmingCharacters(in:.whitespacesAndNewlines) }.filter { !$0.isEmpty }
+    }
     @Published var voiceSleeping = false
     @Published var recording = false
     @Published var closeWhenDone = UserDefaults.standard.object(forKey:"closeWhenDone") as? Bool ?? true {
@@ -229,6 +239,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var startingVoice = false
     var autoCloseGeneration = UUID()
     let preferencesDraft = PreferencesDraft()
+    var qaInbox: QAInbox?
+    var levelGate = VoiceLevelGate()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if let index=CommandLine.arguments.firstIndex(of:"--probe-cua"),CommandLine.arguments.count>index+1 {
@@ -307,7 +319,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             if self?.state.capturingShortcut == true { self?.captureShortcut(event); return nil }
             if event.keyCode == 53 { self?.stop(close: true); return nil }; return event
         }
-        if CommandLine.arguments.contains("--render-settings") {
+        if let inbox=QAInbox(arguments:CommandLine.arguments) {
+            // Live tests submit typed instructions. The microphone stays off unless --qa-listen is also given.
+            qaInbox=inbox;showPanel(key:false)
+            inbox.start(submit:{ [weak self] in self?.acceptInstruction($0) },status:{ [weak self] in self?.qaStatus() ?? [:] })
+            if CommandLine.arguments.contains("--qa-listen") { DispatchQueue.main.asyncAfter(deadline:.now()+0.4) { [weak self] in self?.openVoice() } }
+        } else if CommandLine.arguments.contains("--render-settings") {
             showSettings()
             state.settingsPage=CommandLine.arguments.contains("--preview-setup") ? "Setup" : "Everyday"
             DispatchQueue.main.asyncAfter(deadline: .now()+0.7) { [weak self] in self?.renderPreview(settings:true) }
@@ -522,9 +539,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 let capture=SpeechCapture()
                 capture.pauseDuration=self.state.speechPause
                 capture.segmentEpoch = self.audioEpoch
-                capture.onSegment = { [weak self] url, epoch in
+                capture.onSegment = { [weak self] url, epoch, level in
                     DispatchQueue.main.async {
                         guard let self, self.voiceGeneration == token, self.audioEpoch == epoch else { try? FileManager.default.removeItem(at:url); return }
+                        if let level, !self.levelGate.accepts(level), self.state.ignoreQuieterVoices {
+                            try? FileManager.default.removeItem(at:url)
+                            self.state.detail="Ignored a quieter voice. Speak as you usually do, or turn this off in Settings."; return
+                        }
                         guard self.audioQueue.count < 8 else { try? FileManager.default.removeItem(at:url); self.fail("Speech queue is full. Please let the current instructions finish."); return }
                         self.audioQueue.append(url); self.transcribeNext()
                     }
@@ -559,19 +580,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let token=voiceGeneration; let epoch=audioEpoch
         transcribing=true
         if !state.busy { state.phase="Listening · transcribing" }
-        whisperSession.transcribe(runtime:runtime,url:url,dictation:state.dictating) { [weak self] result in
+        whisperSession.transcribe(runtime:runtime,url:url,dictation:state.dictating,prompt:speechPrompt()) { [weak self] result in
             try? FileManager.default.removeItem(at:url)
             guard let self,self.voiceGeneration==token,self.audioEpoch==epoch else { return }
             self.transcribing=false;self.transcribingURL=nil
             switch result {
             case .failure(let error): self.fail(error.localizedDescription);return
             case .success(let text):
-                if !text.isEmpty && !(text.hasPrefix("[") && text.hasSuffix("]")) && !(text.hasPrefix("(") && text.hasSuffix(")")) {
-                    self.acceptInstruction(text)
-                }
+                if !SpeechText.isNonSpeech(text,dictation:self.state.dictating) { self.acceptInstruction(SpeechText.applyVocabulary(text,self.state.vocabulary)) }
             }
             self.transcribeNext()
         }
+    }
+    /// Vocabulary for every phrase; while dictating, also the text before the caret plus phrases
+    /// still waiting to be typed, so a sentence split by a pause keeps its casing.
+    func speechPrompt() -> String {
+        var context=""
+        if state.dictating,let bound=voiceEditor.target {
+            let queued=([commands.active].compactMap { $0 }+commands.pending).filter { VoiceEditCommand.parse($0)==nil }
+            context=([voiceEditor.textBeforeCaret(pid:bound.pid,window:bound.window) ?? ""]+queued).joined(separator:" ")
+        }
+        return SpeechText.prompt(dictation:state.dictating,vocabulary:state.vocabulary,context:context)
     }
     @discardableResult func handleSessionInstruction(_ text: String) -> Bool {
         let phrase=VoiceCommandQueue.normalized(text)
@@ -834,6 +863,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             presentPendingReview();clearReview()
         default: break
         }
+    }
+    func qaStatus() -> [String:Any] {
+        ["phase":state.phase,"detail":state.detail,"busy":state.busy,"dictating":state.dictating,"sleeping":state.voiceSleeping,"recording":state.recording,"command":state.command,"interpreted":state.interpreted,
+         "pending":commands.pending.count,"completedAt":state.completedAt.timeIntervalSince1970]
     }
     func ack(_ token: UUID) {
         guard generation==token, task?.isRunning==true else { return }

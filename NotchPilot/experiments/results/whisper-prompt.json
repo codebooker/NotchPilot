@@ -1,0 +1,234 @@
+[
+  {
+    "clip": "part1",
+    "dictation": true,
+    "prompt": "",
+    "text": "A little boy rode his.",
+    "confidence": 0.835,
+    "no_speech": 0.007
+  },
+  {
+    "clip": "part2",
+    "dictation": true,
+    "prompt": "",
+    "text": "Purple bike.",
+    "confidence": 0.692,
+    "no_speech": 0.042
+  },
+  {
+    "clip": "part2",
+    "dictation": true,
+    "prompt": "A little boy rode his",
+    "text": "purple bike.",
+    "confidence": 0.843,
+    "no_speech": 0.001
+  },
+  {
+    "clip": "vocab",
+    "dictation": false,
+    "prompt": null,
+    "text": "Open Notch Pilot Settings and Check Cubernetes.",
+    "confidence": 0.69,
+    "no_speech": 0.0
+  },
+  {
+    "clip": "vocab",
+    "dictation": false,
+    "prompt": "Voice commands for a Mac. Open TextEdit. Write a sentence. Type hello world. Vocabulary: NotchPilot, Kubernetes.",
+    "text": "Open NotchPilot Settings and Check Kubernetes.",
+    "confidence": 0.768,
+    "no_speech": 0.0
+  },
+  {
+    "clip": "vocab",
+    "dictation": true,
+    "prompt": "NotchPilot, Kubernetes.",
+    "text": "Open NotchPilot settings and check Kubernetes.",
+    "confidence": 0.761,
+    "no_speech": 0.0
+  },
+  {
+    "clip": "spell",
+    "dictation": false,
+    "prompt": null,
+    "text": "Spell see a tea.",
+    "confidence": 0.654,
+    "no_speech": 0.0
+  },
+  {
+    "clip": "number",
+    "dictation": false,
+    "prompt": null,
+    "text": "5",
+    "confidence": 0.577,
+    "no_speech": 0.0
+  },
+  {
+    "clip": "keys",
+    "dictation": false,
+    "prompt": null,
+    "text": "Press Command Shift S.",
+    "confidence": 0.71,
+    "no_speech": 0.0
+  },
+  {
+    "clip": "silence",
+    "dictation": true,
+    "prompt": "",
+    "text": "[BLANK_AUDIO]",
+    "confidence": 0.79,
+    "no_speech": 0.926
+  },
+  {
+    "clip": "whitenoise",
+    "dictation": true,
+    "prompt": "",
+    "text": "(water splashing)",
+    "confidence": 0.535,
+    "no_speech": 0.901
+  },
+  {
+    "clip": "burst",
+    "dictation": true,
+    "prompt": "",
+    "text": "(gunshot)",
+    "confidence": 0.444,
+    "no_speech": 0.887
+  },
+  {
+    "clip": "hum",
+    "dictation": true,
+    "prompt": "",
+    "text": "(dramatic music)",
+    "confidence": 0.657,
+    "no_speech": 0.932
+  },
+  {
+    "clip": "clicks",
+    "dictation": true,
+    "prompt": "",
+    "text": "[MUSIC PLAYING]",
+    "confidence": 0.753,
+    "no_speech": 0.825
+  },
+  {
+    "clip": "breath",
+    "dictation": true,
+    "prompt": "",
+    "text": "(whooshing)",
+    "confidence": 0.613,
+    "no_speech": 0.529
+  },
+  {
+    "clip": "Tink",
+    "dictation": true,
+    "prompt": "",
+    "text": "[BLANK_AUDIO]",
+    "confidence": 0.858,
+    "no_speech": 0.815
+  },
+  {
+    "clip": "Pop",
+    "dictation": true,
+    "prompt": "",
+    "text": "[BLANK_AUDIO]",
+    "confidence": 0.818,
+    "no_speech": 0.871
+  },
+  {
+    "clip": "Basso",
+    "dictation": true,
+    "prompt": "",
+    "text": "[BLANK_AUDIO]",
+    "confidence": 0.831,
+    "no_speech": 0.447
+  },
+  {
+    "clip": "Glass",
+    "dictation": true,
+    "prompt": "",
+    "text": "(bell dings)",
+    "confidence": 0.64,
+    "no_speech": 0.406
+  },
+  {
+    "clip": "silence",
+    "dictation": false,
+    "prompt": null,
+    "text": "You",
+    "confidence": 0.484,
+    "no_speech": 0.001
+  },
+  {
+    "clip": "whitenoise",
+    "dictation": false,
+    "prompt": null,
+    "text": "(static)",
+    "confidence": 0.881,
+    "no_speech": 0.003
+  },
+  {
+    "clip": "burst",
+    "dictation": false,
+    "prompt": null,
+    "text": "[gunshot]",
+    "confidence": 0.834,
+    "no_speech": 0.0
+  },
+  {
+    "clip": "hum",
+    "dictation": false,
+    "prompt": null,
+    "text": "[Music]",
+    "confidence": 0.769,
+    "no_speech": 0.0
+  },
+  {
+    "clip": "clicks",
+    "dictation": false,
+    "prompt": null,
+    "text": "[Music]",
+    "confidence": 0.867,
+    "no_speech": 0.001
+  },
+  {
+    "clip": "breath",
+    "dictation": false,
+    "prompt": null,
+    "text": "[ Sound Effects ]",
+    "confidence": 0.943,
+    "no_speech": 0.002
+  },
+  {
+    "clip": "Tink",
+    "dictation": false,
+    "prompt": null,
+    "text": "[BLANK_AUDIO]",
+    "confidence": 0.889,
+    "no_speech": 0.003
+  },
+  {
+    "clip": "Pop",
+    "dictation": false,
+    "prompt": null,
+    "text": "(silence)",
+    "confidence": 0.844,
+    "no_speech": 0.048
+  },
+  {
+    "clip": "Basso",
+    "dictation": false,
+    "prompt": null,
+    "text": "[Music]",
+    "confidence": 0.74,
+    "no_speech": 0.003
+  },
+  {
+    "clip": "Glass",
+    "dictation": false,
+    "prompt": null,
+    "text": "[DING]",
+    "confidence": 0.891,
+    "no_speech": 0.001
+  }
+]

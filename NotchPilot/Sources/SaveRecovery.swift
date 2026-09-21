@@ -19,6 +19,13 @@ enum SaveRecovery {
         }
         return url
     }
+    /// Compares file identity, not path strings: folders such as /tmp are symlinks, and path
+    /// standardization only strips /private once a file exists.
+    static func sameFile(_ a:URL,_ b:URL) -> Bool {
+        guard let first=try? a.resourceValues(forKeys:[.fileResourceIdentifierKey]).fileResourceIdentifier,
+              let second=try? b.resourceValues(forKeys:[.fileResourceIdentifierKey]).fileResourceIdentifier else { return false }
+        return first.isEqual(second)
+    }
     static func identified(_ nodes:[AXUIElement],_ id:String) -> AXUIElement? {
         let found=nodes.filter { HostKeyboard.attribute($0,kAXIdentifierAttribute) as? String == id }
         return found.count==1 ? found[0] : nil
@@ -99,7 +106,8 @@ enum SaveRecovery {
         }
         let fresh=VoiceEditor.nodes(pid:pid)
         guard let freshName=identified(fresh,"saveAsNameTextField"),HostKeyboard.attribute(freshName,kAXValueAttribute) as? String==url.lastPathComponent,
-              let save=identified(fresh,"OKButton"),HostKeyboard.attribute(save,kAXTitleAttribute) as? String=="Save" else {
+              // The default button's identifier is stable; its title is localized ("Save", "Sichern", …).
+              let save=identified(fresh,"OKButton"),HostKeyboard.attribute(save,kAXEnabledAttribute) as? Bool==true else {
             throw VoiceEditor.problem("The Save dialog changed. No file was saved.")
         }
         _=try destination(url.path) // Check again for a file created while navigating.
@@ -109,7 +117,7 @@ enum SaveRecovery {
             guard valid() else { throw VoiceEditor.problem("Save cancelled. Check the destination for any completed save.") }
             if FileManager.default.fileExists(atPath:url.path) {
                 let docs=VoiceEditor.nodes(pid:pid).compactMap { HostKeyboard.attribute($0,kAXDocumentAttribute) as? String }
-                if docs.contains(where:{URL(string:$0)?.standardizedFileURL==url}) { return url }
+                if docs.contains(where:{ URL(string:$0).map { sameFile($0,url) } ?? false }) { return url }
             }
             try await Task.sleep(nanoseconds:100_000_000)
         }

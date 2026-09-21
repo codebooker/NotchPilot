@@ -129,10 +129,39 @@ final class VoiceEditor {
     func documentText(pid: pid_t, window: Int) -> String? {
         (try? field(pid:pid,window:window)).flatMap { HostKeyboard.attribute($0,kAXValueAttribute) as? String }
     }
+    /// Text before the caret in the bound document, for recognition context. Nil when unavailable.
+    func textBeforeCaret(pid: pid_t, window: Int) -> String? {
+        guard let element=try? field(pid:pid,window:window),let value=HostKeyboard.attribute(element,kAXValueAttribute) as? String,
+              let selection=Self.selection(element),selection.location<=(value as NSString).length else { return nil }
+        return (value as NSString).substring(to:selection.location)
+    }
     func insert(_ text:String,pid:pid_t,window:Int,spacing:Bool=true) throws {
         let element=try field(pid:pid,window:window)
         guard let spec=Self.spec(element) else { throw Self.problem("The editor does not expose a usable text area.") }
+        if spacing,let previous=history.last,previous.pid==pid,previous.window==window,CFEqual(previous.field,element),
+           let value=HostKeyboard.attribute(element,kAXValueAttribute) as? String,let selection=Self.selection(element),
+           Self.joinsSentence(text,value:value,selection:selection,previous:previous) {
+            // Replace the period Whisper added to the previous phrase; scratch that restores it.
+            try Self.selectRange(NSRange(location:selection.location-1,length:1),field:element)
+            record(try HostKeyboard.insertText(" "+text,spec:spec,pid:pid,window:window,spacing:false))
+            return
+        }
         record(try HostKeyboard.insertText(text,spec:spec,pid:pid,window:window,spacing:spacing))
+    }
+    /// Whisper ends each phrase with a period. A next phrase that starts in lowercase, decoded with the
+    /// text before the caret as context, continues the sentence, so that automatic period goes.
+    static func joinsSentence(_ text:String,value:String,selection:NSRange,previous:DictationEdit?) -> Bool {
+        guard let previous,previous.after==value,selection.length==0,
+              selection.location==previous.range.location+previous.inserted.utf16.count,
+              previous.inserted.hasSuffix("."),!previous.inserted.hasSuffix(".."),
+              let first=text.first,first.isLowercase else { return false }
+        return true
+    }
+    static func selection(_ field:AXUIElement) -> NSRange? {
+        guard let raw=HostKeyboard.attribute(field,kAXSelectedTextRangeAttribute),CFGetTypeID(raw)==AXValueGetTypeID() else { return nil }
+        var range=CFRange()
+        guard AXValueGetValue(raw as! AXValue,.cfRange,&range) else { return nil }
+        return NSRange(location:range.location,length:range.length)
     }
     static func uniqueRange(_ phrase:String,in text:String) -> NSRange? {
         guard !phrase.isEmpty else { return nil }
