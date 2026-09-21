@@ -144,6 +144,8 @@ import Foundation
         precondition(PointTargets.matches("sea",labels:dialog)==[4],"A unique prefix")
         precondition(PointTargets.matches("sav",labels:dialog)==[0,1],"Ambiguous prefixes return every match")
         precondition(PointTargets.matches("delete",labels:dialog).isEmpty)
+        precondition(PointTargets.windowButtonName("AXCloseButton")=="Close" && PointTargets.windowButtonName("AXZoomButton")=="Zoom","Title-bar buttons get their names, not their tooltips")
+        precondition(PointTargets.windowButtonName("AXFullScreenButton")=="Full Screen" && PointTargets.windowButtonName("AXSearchField")==nil)
         let ordered=PointTargets.readingOrder([CGRect(x:300,y:12,width:20,height:20),CGRect(x:10,y:200,width:20,height:20),CGRect(x:10,y:10,width:20,height:20)])
         precondition(ordered==[2,0,1],"Numbers read left to right, then top to bottom")
         var grid=MouseGrid(CGRect(x:0,y:0,width:900,height:600))
@@ -151,6 +153,25 @@ import Foundation
         precondition(grid.zoom(1) && grid.rect==CGRect(x:300,y:200,width:100,height:200/3.0),"Cell 1 is the top left")
         precondition(grid.back() && grid.rect==CGRect(x:300,y:200,width:300,height:200) && !grid.zoom(0) && !grid.zoom(10))
         precondition(grid.back() && !grid.back(),"Back stops at the whole screen")
+        precondition(VoiceEditCommand.parse("Read that.") == .readAloud(.that) && VoiceEditCommand.parse("Read it back") == .readAloud(.that))
+        precondition(VoiceEditCommand.parse("Read the document.") == .readAloud(.document) && VoiceEditCommand.parse("Read everything") == .readAloud(.document))
+        precondition(VoiceEditCommand.parse("Read the paper tomorrow.") == nil,"Only exact read-back phrases")
+        // Reading aloud mutes the microphone and drops any half-heard phrase, so NotchPilot never hears itself.
+        let reader=SpeechCapture()
+        reader.running=true;reader.segmenter=SpeechSegmenter(sampleRate:16000);reader.segmenter?.active=true
+        reader.setMuted(true)
+        precondition(reader.muted && !reader.hasPendingSpeech,"Muting discards partial speech")
+        reader.setMuted(false)
+        precondition(!reader.muted)
+        // Every phrase the in-app help advertises must work.
+        let sessionPhrases=["Go to sleep","Wake up","Cancel that","Stop"]
+        for (_,examples) in VoiceHelp.sections {
+            for phrase in examples where !sessionPhrases.contains(phrase) {
+                precondition(VoiceEditCommand.parse(phrase) != nil,"Help advertises a phrase that does not parse: "+phrase)
+            }
+        }
+        precondition(VoiceCommandQueue.isStop("Stop") && VoiceCommandQueue.isCancelTask("Cancel that"))
+        precondition(VoiceHelp.text.contains("Show numbers") && VoiceHelp.text.components(separatedBy:"\n").count==VoiceHelp.sections.count)
         precondition(QAInbox(arguments:["NotchPilot"])==nil,"QA automation is off unless explicitly launched with --qa-inbox")
         let inboxDirectory=FileManager.default.temporaryDirectory.appendingPathComponent("qa-"+UUID().uuidString)
         try FileManager.default.createDirectory(at:inboxDirectory,withIntermediateDirectories:true)

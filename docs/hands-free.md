@@ -54,7 +54,8 @@ Pause between phrases using your chosen one-, two-, or three-second delay. You d
 | **Save as My note.rtf in my documents** | Save a new copy to Documents. |
 | **Save as ~/Desktop/My note.rtf** | Use an explicit destination path. |
 | **Go to sleep** / **Pause listening** | Ignore ordinary speech until **Wake up** / **Resume listening**. The mic remains on to hear the wake phrase. |
-| **What can I say?** | Open the built-in voice-command guide. |
+| **What can I say?** | Open the Commands and activity window at its “What can I say?” section. Every phrase it lists is checked by the tests. |
+| **Read that** / **Read the document** | Read the selection (or NotchPilot's last edit) or the whole document aloud, up to 4,000 characters. The microphone is paused while it speaks and for 0.4 seconds after, so it never hears itself. Press Escape to stop. |
 | **Cancel that** | Cancel work and waiting requests, keeping the microphone available. Completed changes remain. |
 | **Stop**, hotkey, Escape, or × | End the session and stop capture. Spoken commands take effect after transcription. |
 
@@ -109,4 +110,4 @@ Dictation remains active across pauses. An individual unbroken phrase may last u
 
 The controlled desktop trials submitted transcripts through the app's typed command field. The same instruction handler accepts microphone transcripts, but these trials are not a substitute for testing real microphones, accents, speech impairments, or noisy rooms. A separate base.en audio replay verified persistent recognition and invalid-file recovery. See [Testing](testing.md).
 
-Next useful additions: spoken feedback that cannot trigger its own microphone, numbered control overlays, a spelling/vocabulary mode, and real-user accessibility trials. These are not implemented yet.
+Still to do: real-microphone trials with real users (accents, speech differences, noisy rooms), a way to stop reading by voice (the microphone is paused while reading, so use Escape), and line-based editing (“delete this line”).

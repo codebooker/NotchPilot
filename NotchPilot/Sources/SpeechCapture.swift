@@ -23,6 +23,14 @@ final class SpeechCapture {
     var onLevel: ((CGFloat) -> Void)?
     var onVoiceActivity: (() -> Void)?
     var onError: ((String) -> Void)?
+    /// While NotchPilot speaks, microphone audio is dropped rather than segmented.
+    private(set) var muted = false
+    func setMuted(_ on: Bool) {
+        queue.sync {
+            muted=on;vadEpoch=UUID()
+            segmenter?.reset();pendingFrames.removeAll();resampler?.reset();vad?.reset()
+        }
+    }
     var hasPendingSpeech: Bool { queue.sync { segmenter?.active == true || segmenter?.discarding == true } }
 
     func start(vad: SpeechFrameClassifier) throws {
@@ -39,7 +47,7 @@ final class SpeechCapture {
             guard let self, let channels = buffer.floatChannelData else { return }
             let samples = Array(UnsafeBufferPointer(start: channels[0], count: Int(buffer.frameLength)))
             self.queue.async {
-                guard self.running else { return }
+                guard self.running,!self.muted else { return }
                 self.enqueueForVAD(samples)
                 if Date().timeIntervalSince(self.lastMeter) > 0.08 {
                     self.lastMeter = Date()

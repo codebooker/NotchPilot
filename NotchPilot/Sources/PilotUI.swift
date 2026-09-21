@@ -246,6 +246,16 @@ struct ActivityView: View {
                         .disabled(state.busy || state.requestDraft.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)
                 }
             }.controlSize(.large)
+            DisclosureGroup("What can I say?",isExpanded:$state.showHelp) {
+                VStack(alignment:.leading,spacing:7) {
+                    ForEach(VoiceHelp.sections,id:\.0) { section in
+                        HStack(alignment:.firstTextBaseline,spacing:10) {
+                            Text(section.0).fontWeight(.semibold).frame(width:88,alignment:.leading)
+                            Text(section.1.joined(separator:" · ")).frame(maxWidth:.infinity,alignment:.leading)
+                        }
+                    }
+                }.font(.system(size:12)).padding(.top,6)
+            }.font(.system(size:12)).foregroundStyle(PilotStyle.secondary)
             DisclosureGroup("Details",isExpanded:$state.activityDetails) {
                 ScrollView {
                     VStack(alignment:.leading,spacing:8) {

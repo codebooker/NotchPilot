@@ -4,6 +4,19 @@ import Foundation
 enum TextUnit: String, Equatable { case word, sentence, paragraph }
 enum TextDirection: Equatable { case previous, next }
 enum TextCase: Equatable { case capitalized, uppercase, lowercase }
+enum ReadScope: Equatable { case that, document }
+
+/// "What can I say?" Built from example phrases that the session tests parse, so help cannot
+/// advertise a command that does not work.
+enum VoiceHelp {
+    static let sections: [(String, [String])] = [
+        ("Dictate", ["Start dictating","Done dictating","New paragraph","Scratch that","Spell c a t","Literal text new line"]),
+        ("Edit", ["Select purple bike","Select previous word","Delete that","Replace purple with blue","Capitalize that","Insert after little","Select all"]),
+        ("Point", ["Show numbers","Click 5","Click Save","Mouse grid","Double click","Right click"]),
+        ("Keys and apps", ["Press command S","Next field","Open Safari","Save as Note on my desktop","Add that to vocabulary"]),
+        ("Listen", ["Read that","Go to sleep","Wake up","Cancel that","Stop"])]
+    static var text: String { sections.map { $0.0+": "+$0.1.joined(separator:" · ") }.joined(separator:"\n") }
+}
 
 /// A key plus modifiers, spoken as "press command shift s".
 struct KeyChord: Equatable {

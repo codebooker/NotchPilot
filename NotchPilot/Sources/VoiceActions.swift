@@ -20,8 +20,8 @@ extension AppDelegate {
             try await Task.sleep(nanoseconds:150_000_000)
             guard generation==token else { return }
             if command == .help {
-                finishVoiceAction("Start dictating · Done dictating · New paragraph · Select [words] · Replace [words] with [words] · Scratch that · Go to beginning/end · Save as ~/Desktop/Note.txt · Go to sleep · Wake up. Use command mode for other app tasks.",token:token)
-                state.activityDetails=true;presentActivity();return
+                finishVoiceAction("Here is what you can say. Anything else is a request for the current app.",token:token)
+                state.showHelp=true;presentActivity();return
             }
             if command == .end {
                 state.dictating=false;speech?.setDictation(false);voiceEditor.target=nil
@@ -71,7 +71,15 @@ extension AppDelegate {
                 finishVoiceAction("Pressed \(chord.label).",token:token);return
             }
             if case .addWord(nil)=command {
-                finishVocabulary(try voiceEditor.thatText(pid:pid,window:window),add:true,token:token);return
+                let word=try voiceEditor.thatText(pid:pid,window:window).trimmingCharacters(in:.whitespacesAndNewlines.union(.punctuationCharacters))
+                finishVocabulary(word,add:true,token:token);return
+            }
+            if case .readAloud(let scope)=command {
+                let source=scope == .document ? voiceEditor.documentText(pid:pid,window:window) : try voiceEditor.thatText(pid:pid,window:window)
+                guard var text=source?.trimmingCharacters(in:.whitespacesAndNewlines),!text.isEmpty else { throw VoiceEditor.problem("There is nothing to read.") }
+                let partial=text.count>4000
+                if partial { text=String(text.prefix(4000)) }
+                readAloud(text,token:token,finished:partial ? "Read the first 4,000 characters." : "Finished reading.");return
             }
             if command == .start {
                 _=try voiceEditor.field(pid:pid,window:window)
@@ -102,6 +110,24 @@ extension AppDelegate {
         }
         }
         return true
+    }
+    /// Mutes the microphone while speaking and for a short tail afterwards, so the room falls quiet
+    /// before listening resumes. Escape or the hotkey stops reading along with the session.
+    func readAloud(_ text:String,token:UUID,finished:String) {
+        let reading=UUID();readingToken=reading
+        speech?.setMuted(true)
+        state.phase="Reading aloud";state.detail="Reading aloud. The microphone is paused; press Escape to stop."
+        speechOutput.speak(text) { [weak self] in
+            DispatchQueue.main.asyncAfter(deadline:.now()+0.4) { [weak self] in
+                guard let self,self.readingToken==reading else { return }
+                self.readingToken=nil;self.speech?.setMuted(false)
+                self.finishVoiceAction(finished,token:token)
+            }
+        }
+    }
+    func stopReading() {
+        guard readingToken != nil else { return }
+        readingToken=nil;speechOutput.stop();speech?.setMuted(false)
     }
     func finishVocabulary(_ word:String,add:Bool,token:UUID) {
         let changed=add ? state.addVocabulary(word) : state.removeVocabulary(word)

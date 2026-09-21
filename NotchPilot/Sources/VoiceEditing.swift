@@ -7,6 +7,7 @@ enum VoiceEditCommand: Equatable {
     case press(KeyChord), selectRelative(TextUnit,TextDirection,Int), deleteRelative(TextUnit,TextDirection,Int)
     case selectThat, deleteThat, selectAll, transformThat(TextCase), insertAt(before:Bool,String), spell(String)
     case addWord(String?), removeWord(String)
+    case readAloud(ReadScope)
     case showNumbers, hideOverlay, mouseGrid, gridBack, number(Int), choose(Int,ClickKind), clickNamed(String,ClickKind), pointerClick(ClickKind)
     var isPointing: Bool {
         switch self {
@@ -41,6 +42,8 @@ enum VoiceEditCommand: Equatable {
         case "capitalize that","cap that","caps that": return .transformThat(.capitalized)
         case "all caps that","uppercase that": return .transformThat(.uppercase)
         case "no caps that","lowercase that": return .transformThat(.lowercase)
+        case "read that","read it back","read that back","read the selection","read selection": return .readAloud(.that)
+        case "read the document","read document","read everything","read all","read it all": return .readAloud(.document)
         case "show numbers","show the numbers","number the controls","show labels": return .showNumbers
         case "hide numbers","hide the numbers","close numbers","hide grid","hide the grid","close grid","close the grid": return .hideOverlay
         case "mouse grid","show grid","show the grid","show mouse grid": return .mouseGrid
@@ -304,12 +307,13 @@ final class VoiceEditor {
         guard let last=history.last,last.pid==pid,last.window==window,CFEqual(last.field,element),last.after==text else { return nil }
         return NSRange(location:last.range.location,length:last.inserted.utf16.count)
     }
+    /// The text of "that": the selection, else NotchPilot's last edit if the document is unchanged.
     func thatText(pid:pid_t,window:Int) throws -> String {
         let element=try field(pid:pid,window:window)
         guard let text=HostKeyboard.attribute(element,kAXValueAttribute) as? String,
               let range=thatRange(element,text:text,pid:pid,window:window) else {
-            throw Self.problem("Nothing to add yet. Select or spell the word first.")
+            throw Self.problem("Nothing to use yet. Select the words first, or dictate something.")
         }
-        return (text as NSString).substring(with:range).trimmingCharacters(in:.whitespacesAndNewlines.union(.punctuationCharacters))
+        return (text as NSString).substring(with:range)
     }
 }

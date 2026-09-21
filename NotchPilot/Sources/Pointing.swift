@@ -25,7 +25,12 @@ enum PointTargets {
         guard AXValueGetValue(p as! AXValue,.cgPoint,&point),AXValueGetValue(s as! AXValue,.cgSize,&size) else { return nil }
         return CGRect(origin:point,size:size)
     }
+    /// Title-bar buttons expose only tooltips ("this button also has an action to zoom the window").
+    static func windowButtonName(_ subrole: String) -> String? {
+        ["AXCloseButton":"Close","AXMinimizeButton":"Minimize","AXZoomButton":"Zoom","AXFullScreenButton":"Full Screen"][subrole]
+    }
     static func label(_ element: AXUIElement) -> String {
+        if let subrole=HostKeyboard.attribute(element,kAXSubroleAttribute) as? String,let name=windowButtonName(subrole) { return name }
         for key in [kAXTitleAttribute,kAXDescriptionAttribute,kAXPlaceholderValueAttribute,kAXHelpAttribute] {
             if let text=HostKeyboard.attribute(element,key) as? String,!text.trimmingCharacters(in:.whitespaces).isEmpty { return text }
         }

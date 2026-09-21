@@ -36,6 +36,7 @@ final class PilotState: ObservableObject {
     }
     var connectionProvider: String { engine == "cua" ? "openrouter" : provider }
     @Published var activityDetails = false
+    @Published var showHelp = false
     @Published var settingsPage = "Everyday"
     @Published var appearance = PilotAppearance(rawValue:UserDefaults.standard.string(forKey:"appearance") ?? "system") ?? .system {
         didSet { UserDefaults.standard.set(appearance.rawValue,forKey:"appearance");changeAppearance?() }
@@ -253,6 +254,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var qaInbox: QAInbox?
     var levelGate = VoiceLevelGate()
     var pointing: Pointing?
+    let speechOutput = SpeechOutput()
+    var readingToken: UUID?
     let pointingOverlay = PointingOverlay()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -341,6 +344,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             showSettings()
             state.settingsPage=CommandLine.arguments.contains("--preview-setup") ? "Setup" : "Everyday"
             DispatchQueue.main.asyncAfter(deadline: .now()+0.7) { [weak self] in self?.renderPreview(settings:true) }
+        } else if CommandLine.arguments.contains("--render-activity") {
+            state.showHelp=true;presentActivity()
+            DispatchQueue.main.asyncAfter(deadline: .now()+0.7) { [weak self] in self?.renderPreview(activity:true) }
         } else if CommandLine.arguments.contains("--render-preview") {
             if CommandLine.arguments.contains("--preview-waves") { state.recording=true;state.level=0.65 }
             if CommandLine.arguments.contains("--preview-question") { state.question="Which Tom did you mean?";state.phase="Needs attention" }
@@ -642,7 +648,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         discardPendingAudio()
     }
     func cancelCurrentTask() {
-        autoCloseGeneration=UUID();generation=UUID();planner.cancel();clearReview();hidePointing()
+        autoCloseGeneration=UUID();generation=UUID();planner.cancel();clearReview();hidePointing();stopReading()
         try? input?.fileHandleForWriting.close();task?.terminate();task=nil;input=nil;workerSucceeded=false
         commands.finish(success:false);clearWaitingRequests()
         dialogue=[];originalGoal="";resolvedGoal="";flightPlan=nil
@@ -908,7 +914,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     func stop(close: Bool) {
         autoCloseGeneration=UUID()
-        generation=UUID(); stopAudio(); planner.cancel();clearReview();hidePointing()
+        generation=UUID(); stopReading(); stopAudio(); planner.cancel();clearReview();hidePointing()
         state.dictating=false;state.voiceSleeping=false;voiceEditor.target=nil;voiceEditor.history.removeAll()
         try? input?.fileHandleForWriting.close();task?.terminate(); task=nil; input=nil; commands.cancel(); dialogue=[]; originalGoal=""; resolvedGoal=""
         state.question=""; state.answer=""; state.interpreted=""; state.requestDraft=""
@@ -1091,8 +1097,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         NSApp.activate(ignoringOtherApps:true);activityWindow?.makeKeyAndOrderFront(nil)
     }
-    func renderPreview(settings: Bool = false) {
-        guard let view=(settings ? preferences?.contentView : panel.contentView), let bitmap=view.bitmapImageRepForCachingDisplay(in:view.bounds) else { NSApp.terminate(nil); return }
+    func renderPreview(settings: Bool = false, activity: Bool = false) {
+        guard let view=(activity ? activityWindow?.contentView : settings ? preferences?.contentView : panel.contentView), let bitmap=view.bitmapImageRepForCachingDisplay(in:view.bounds) else { NSApp.terminate(nil); return }
         view.cacheDisplay(in:view.bounds,to:bitmap)
         let path=CommandLine.arguments.last ?? "/tmp/notchpilot-preview.png"
         if let data=bitmap.representation(using:.png,properties:[:]) { try? data.write(to:URL(fileURLWithPath:path)) }
