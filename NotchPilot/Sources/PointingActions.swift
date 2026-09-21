@@ -123,7 +123,7 @@ extension AppDelegate {
     @MainActor func moveCursor(to point: CGPoint, kind: ClickKind, token: UUID) async {
         guard let cursor else { return }
         if cursorMotion==nil { cursorMotion=CursorMotion(window:cursor) }
-        (cursor.contentView as? CursorView)?.configure(["kind":"click","app_name":NSWorkspace.shared.frontmostApplication?.localizedName ?? ""])
+        (cursor.contentView as? CursorView)?.configure(["kind":"click"])
         let appKit=PointTargets.appKit(CGRect(origin:point,size:.zero)).origin
         // A cancelled animation never arrives, so resume after its longest duration regardless.
         await withCheckedContinuation { (done: CheckedContinuation<Void,Never>) in

@@ -49,7 +49,7 @@ S1 Forms is an isolated experiment, not part of the production routing graph. It
 
 Opening the conversation/settings during Cua work requests a checkpoint pause. The editor waits until an action boundary before taking focus. Resume releases the checkpoint; active-work timeout accounting excludes review waits. Cancelling closes the worker’s input pipe and invalidates its generation so delayed events cannot resume input. Native shortcuts and the legacy Jev path have fewer checkpoints and can finish before the review window opens.
 
-The cursor is a native click-through overlay with an approximately 26 × 28 point rounded lavender pointer and a compact identity badge. The badge uses observed delivery/app metadata; edge placement does not change the input hotspot. Motion takes roughly 0.24–0.52 seconds, with input gated on arrival. macOS Reduce Motion disables motion animation. This is a visible overlay, not a separate input seat.
+The cursor is a native click-through overlay: an approximately 26 × 28 point rounded lavender pointer with small action marks and a click pulse, and no text badge. Motion takes roughly 0.24–0.52 seconds, with input gated on arrival. macOS Reduce Motion disables motion animation. This is a visible overlay, not a separate input seat.
 
 ## Engines and keys
 

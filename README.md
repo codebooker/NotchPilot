@@ -40,7 +40,7 @@ The idea is simple: make everyday computer tasks easier to ask for—whether you
 | **Talk naturally** | Persistent local Whisper `base.en` transcribes speech without reloading for each phrase. A local Silero speech detector replaces the old volume gate; optional Qwen3 1.7B helps interpret casual phrasing. |
 | **Keep the conversation going** | Say another request while it works. Follow-ups queue in order, with recent successful tasks as context. |
 | **Dictate and correct** | Say “start dictating,” keep talking, then “replace purple with blue” or “scratch that.” Native Save As recovery helps finish the document. |
-| **See what happens** | The working app comes forward. A rounded lavender cursor shows the target, action feedback, and a compact NotchPilot badge. |
+| **See what happens** | The working app comes forward. A rounded lavender cursor shows the target and action feedback. |
 | **Take your time** | Choose a one-, two-, or three-second speaking pause. Changing it does not cut off the phrase in progress. |
 | **Stay in control** | Cancel a task without closing the mic. Review and clear queued requests. Pause Cua while you type, then resume. |
 | **Keep your retinas** | Dark, Light, or Follow System for conversation and settings. The voice strip stays dark. |
@@ -63,7 +63,7 @@ For continuous writing, say **“Start dictating.”** Then speak your sentences
 These describe exercised task types, not a guarantee that every app or phrasing will work. Start with one clear request, then build up to a short sequence.
 
 <p align="center">
-  <img src="docs/assets/cursor.png" alt="The native rounded lavender NotchPilot pointer and compact identity badge" width="330">
+  <img src="docs/assets/cursor.png" alt="The native rounded lavender NotchPilot pointer" width="64">
   <br><sub>A small pointer with smooth movement and action feedback. The overlay lets clicks pass through.</sub>
 </p>
 

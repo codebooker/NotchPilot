@@ -285,16 +285,7 @@ import Foundation
             view.cacheDisplay(in:view.bounds,to:bitmap)
             try bitmap.representation(using:.png,properties:[:])?.write(to:URL(fileURLWithPath:CommandLine.arguments[index+1]))
         }
-        if let view=owner.cursor.contentView as? CursorView {
-            let screen=NSRect(x:0,y:0,width:1000,height:700)
-            for point in [NSPoint(x:5,y:100),NSPoint(x:995,y:100)] {
-                view.placeBadge(at:point,on:screen)
-                let left=point.x-CursorView.hotspot.x+view.badgeOrigin.x
-                precondition(left>=6 && left+154<=994,"Badge stays visible at either screen edge")
-            }
-            view.placeBadge(at:NSPoint(x:500,y:10),on:screen)
-            precondition(view.badgeOrigin.y+26<CursorView.hotspot.y,"Bottom-edge badge sits above the hotspot")
-        }
+        precondition(CursorView.size.width<=64 && CursorView.size.height<=64,"The cursor is only the pointer, with no NotchPilot badge")
         // The overlay draws badges and outlines only; everything else stays transparent and click-through.
         let overlayView=PointingView(frame:NSRect(x:0,y:0,width:400,height:300))
         overlayView.screenQuartz=CGRect(x:0,y:0,width:400,height:300)
