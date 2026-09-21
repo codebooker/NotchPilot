@@ -50,6 +50,18 @@ enum VoiceEditCommand: Equatable {
         if let p=parts("^(?:type exactly|literal text) (.+)$") { return .insert(p[0]) }
         return nil
     }
+    /// During dictation, a phrase that only resembles a command is typed instead, as Dragon and
+    /// Voice Control do: "Select the best option" is text unless that phrase is in the document.
+    /// Unreadable text (nil) is not prose, so the editor problem is reported rather than guessed.
+    func isProse(in document: String?) -> Bool {
+        switch self {
+        case .saveAs(let path): return !path.hasPrefix("/") && !path.hasPrefix("~")
+        case .select(let phrase),.replace(let phrase,_):
+            guard let document else { return false }
+            return (document as NSString).range(of:phrase,options:.caseInsensitive).location==NSNotFound
+        default: return false
+        }
+    }
 }
 
 struct DictationEdit {
@@ -112,6 +124,10 @@ final class VoiceEditor {
         }
         guard candidates.count==1 else { throw Self.problem("Choose the text area first. I could not identify one editable document.") }
         return candidates[0]
+    }
+    /// The bound document's text, or nil when it is not in front or does not expose its value.
+    func documentText(pid: pid_t, window: Int) -> String? {
+        (try? field(pid:pid,window:window)).flatMap { HostKeyboard.attribute($0,kAXValueAttribute) as? String }
     }
     func insert(_ text:String,pid:pid_t,window:Int,spacing:Bool=true) throws {
         let element=try field(pid:pid,window:window)

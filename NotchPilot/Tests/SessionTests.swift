@@ -23,6 +23,16 @@ import Foundation
         precondition(VoiceEditCommand.parse("Save as My Note.txt on my desktop") == .saveAs("~/Desktop/My Note.txt"))
         precondition(VoiceEditCommand.parse("Save as /tmp/name.") == .saveAs("/tmp/name."))
         precondition(VoiceEditCommand.parse("The boy said stop.")==nil)
+        // While dictating, prose that only resembles a command stays prose, as in Dragon and Voice Control.
+        let bike="A little boy rode his purple bike."
+        precondition(VoiceEditCommand.parse("Change is hard to accept.")!.isProse(in:bike))
+        precondition(VoiceEditCommand.parse("Select the best option for your family.")!.isProse(in:bike))
+        precondition(!VoiceEditCommand.parse("Replace Purple with blue.")!.isProse(in:bike))
+        precondition(!VoiceEditCommand.parse("Select purple bike")!.isProse(in:nil),"Unreadable text reports the editor problem instead of guessing")
+        precondition(VoiceEditCommand.parse("Save as much as you can on groceries.")!.isProse(in:bike))
+        precondition(!VoiceEditCommand.parse("Save as My Note.txt on my desktop")!.isProse(in:bike))
+        precondition(!VoiceEditCommand.parse("Save as /tmp/name.")!.isProse(in:bike))
+        precondition(!VoiceEditCommand.scratch.isProse(in:""))
         precondition(VoiceEditor.uniqueRange("cat",in:"A CAT") == NSRange(location:2,length:3))
         precondition(VoiceEditor.uniqueRange("cat",in:"cat cat")==nil)
         precondition(VoiceEditor.uniqueRange("missing",in:"text")==nil)
@@ -246,6 +256,21 @@ import Foundation
         RunLoop.current.run(until:Date().addingTimeInterval(0.3))
         precondition(timedOut==1,"A hung recognizer must fail once and allow restart")
         recognizer.shutdown()
+        // A failed dictation phrase reports the problem without dropping speech said after it.
+        owner.state.dictating=true;owner.state.recording=true;owner.state.busy=true
+        precondition(owner.commands.enqueue("Replace missing words with text"));_=owner.commands.next()
+        precondition(owner.commands.enqueue("The next dictated sentence."))
+        let spoken=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString+".wav")
+        try Data([1,2,3]).write(to:spoken);owner.audioQueue=[spoken]
+        let dictationAudio=owner.audioEpoch
+        owner.dictationProblem("Stale failure",token:UUID())
+        precondition(owner.state.busy && owner.commands.active != nil,"A cancelled phrase must not report a failure")
+        owner.dictationProblem("That text is missing.",token:owner.generation)
+        precondition(owner.commands.active==nil && owner.commands.pending==["The next dictated sentence."],"Later dictation stays queued")
+        precondition(owner.audioQueue==[spoken] && owner.audioEpoch==dictationAudio && FileManager.default.fileExists(atPath:spoken.path),
+                     "Speech awaiting transcription is kept")
+        precondition(!owner.state.busy && owner.state.dictating && owner.state.needsAttention && owner.state.detail.contains("That text is missing."))
+        owner.commands.cancel();owner.audioQueue=[];try? FileManager.default.removeItem(at:spoken)
         print("Session tests passed: recovery, cancellation, continuous voice, auto-close, strip visibility, cursor easing, arrival gating, and fade cancellation.")
     }
 }

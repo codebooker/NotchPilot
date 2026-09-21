@@ -47,9 +47,11 @@ Pause between phrases using your chosen one-, two-, or three-second delay. You d
 
 These routes do not call an online model. Other app requests still use the configured interpreter/controller. Literal mode preserves the *transcript*; it cannot undo a speech recognition mistake. Command phrases are reserved during dictation: say “literal text new paragraph” if those words belong in your document.
 
+While dictating, a sentence that only *resembles* a command is typed as text, as in Dragon and Voice Control. “Select the best option for your family” or “Change is hard to accept” becomes prose unless its target words already appear in the document, and “Save as much as you can” becomes prose because it names no destination. The Commands and activity window notes when this happens; say **scratch that** if you meant the command. A command whose target does appear still runs, so “Change is hard to accept” in a document that already contains “is hard” is still a replacement. Scratch that reverses it.
+
 ## Corrections preserve the document
 
-Insertion uses the editor's observed accessibility selection, checks the exact foreground app/window, and verifies the resulting whole text. It keeps existing text outside the selection. Corrections refuse missing or repeated matches; give a longer unique phrase to resolve ambiguity.
+Insertion uses the editor's observed accessibility selection, checks the exact foreground app/window, and verifies the resulting whole text. It keeps existing text outside the selection. Corrections refuse repeated matches, and outside dictation they also refuse missing ones; give a longer unique phrase to resolve ambiguity. A failed dictation phrase reports the problem and keeps the sentences you said after it; Save As and app-switch failures still clear waiting requests because they change what is in front.
 
 “Scratch that” uses a bounded, in-memory history of the last 20 edits. It checks the document, field, and full text before undoing. A manual edit, different document, or changed contents prevents an automatic undo. It does not invoke the app's arbitrary undo stack, restore earlier sessions, or rewrite the entire document as plain text.
 

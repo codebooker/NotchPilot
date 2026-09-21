@@ -65,6 +65,10 @@ import AVFoundation
         precondition(queue.next()=="Go to Documents")
         queue.finish(success:false)
         precondition(queue.next()==nil,"Failure must stop dependent follow-ups")
+        var dictation=VoiceCommandQueue()
+        precondition(dictation.enqueue("Replace missing with text")); precondition(dictation.enqueue("Next sentence."))
+        _=dictation.next(); dictation.skipActive()
+        precondition(dictation.next()=="Next sentence." && dictation.context.isEmpty,"A failed dictation phrase must not drop later speech")
         precondition(queue.enqueue("Save")); queue.cancel()
         precondition(queue.next()==nil && queue.context.isEmpty,"Stop must clear the session")
         for _ in 0..<8 { precondition(queue.enqueue("Next")) }

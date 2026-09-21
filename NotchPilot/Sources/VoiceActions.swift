@@ -8,6 +8,7 @@ extension AppDelegate {
         let token=UUID();generation=token;state.busy=true;state.cost=0
         if state.preview { finishVoiceAction("Preview: voice editing would run locally. No document changed.",token:token);return true }
         Task { @MainActor in
+        var command=command
         do {
             activityWindow?.orderOut(nil);targetApp?.activate(options:[])
             try await Task.sleep(nanoseconds:150_000_000)
@@ -36,6 +37,9 @@ extension AppDelegate {
                 finishVoiceAction("Opened "+(opened.localizedName ?? "the app")+". Ready for your next request.",token:token);return
             }
             let currentTarget=targetApp.flatMap { app in targetWindowID.map { (pid:app.processIdentifier,window:$0) } }
+            var keptAsText=false
+            if state.dictating,let parsed=command,let bound=voiceEditor.target,
+               parsed.isProse(in:voiceEditor.documentText(pid:bound.pid,window:bound.window)) { command=nil;keptAsText=true }
             let destination: (pid:pid_t,window:Int)?
             if case .saveAs=command { destination=currentTarget } else { destination=voiceEditor.target ?? currentTarget }
             guard let destination else { throw VoiceEditor.problem("Open a document first, then say start dictating.") }
@@ -67,10 +71,23 @@ extension AppDelegate {
                 let literal=["type exactly ","literal text "].contains { goal.lowercased().hasPrefix($0) }
                 try voiceEditor.insert(text,pid:pid,window:window,spacing:!literal)
             } else { try voiceEditor.edit(selected,pid:pid,window:window) }
-            finishVoiceAction("Text updated and verified. "+(state.dictating ? "Keep dictating, or say done dictating." : "Ready for your next request."),token:token)
-        } catch { if generation==token { fail(error.localizedDescription) } }
+            let result=keptAsText ? "Typed as text; it did not match a command. Say scratch that to remove it. " : "Text updated and verified. "
+            finishVoiceAction(result+(state.dictating ? "Keep dictating, or say done dictating." : "Ready for your next request."),token:token)
+        } catch {
+            // Save As and app switches change what is in front, so their failures still stop queued requests.
+            let changesFront=switch command { case .saveAs?,.openApp?: true; default: false }
+            if state.dictating && !changesFront { dictationProblem(error.localizedDescription,token:token) }
+            else if generation==token { fail(error.localizedDescription) }
+        }
         }
         return true
+    }
+    /// Dictation keeps listening after a failed phrase; sentences spoken after it stay queued.
+    func dictationProblem(_ message:String,token:UUID) {
+        guard generation==token else { return }
+        commands.skipActive();state.waitingRequests=commands.pending
+        state.busy=false;state.phase="Dictating · needs attention";state.detail=message+" Still dictating."
+        DispatchQueue.main.async { [weak self] in self?.drainCommands() }
     }
     func finishVoiceAction(_ message:String,token:UUID) {
         guard generation==token else { return }

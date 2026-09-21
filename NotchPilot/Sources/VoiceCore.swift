@@ -80,6 +80,8 @@ struct VoiceCommandQueue {
         } else { pending.removeAll() }
         active = nil
     }
+    /// Dictation phrases are independent: one failed correction must not drop the sentences after it.
+    mutating func skipActive() { active = nil }
     mutating func cancel() { pending.removeAll(); active = nil; context.removeAll() }
     mutating func discardPending() { pending.removeAll() }
     static func normalized(_ text: String) -> String {
