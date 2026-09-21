@@ -30,16 +30,16 @@ final class VADSession: SpeechFrameClassifier {
         do {
             // Process state is shared with the reader thread and main; the write stays outside the
             // lock so a full pipe cannot block the reader that drains it.
-            let input: Pipe = try lock.withLock {
-                guard let runtime else { throw NSError(domain:"VAD",code:2,userInfo:[NSLocalizedDescriptionKey:"Speech detector is not prepared."]) }
+            let pipe: Pipe = try lock.withLock {
+                guard let runtime = self.runtime else { throw NSError(domain:"VAD",code:2,userInfo:[NSLocalizedDescriptionKey:"Speech detector is not prepared."]) }
                 if process?.isRunning != true { try start(runtime) }
-                guard let input else { throw NSError(domain: "VAD", code: 2, userInfo: [NSLocalizedDescriptionKey: "Speech detector is unavailable."]) }
+                guard let input = self.input else { throw NSError(domain: "VAD", code: 2, userInfo: [NSLocalizedDescriptionKey: "Speech detector is unavailable."]) }
                 callbacks.append(Callback(queue:queue,action:completion)); queued = true
                 return input
             }
             var data = Data([70]) // F
             frame.withUnsafeBytes { data.append(contentsOf: $0) }
-            try input.fileHandleForWriting.write(contentsOf: data)
+            try pipe.fileHandleForWriting.write(contentsOf: data)
         } catch {
             if queued { lock.withLock { _ = callbacks.popLast() } }
             completion(.failure(error))
