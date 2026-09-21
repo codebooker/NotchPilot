@@ -76,6 +76,17 @@ final class PilotState: ObservableObject {
     var vocabulary: [String] {
         vocabularyText.split(separator:",").map { $0.trimmingCharacters(in:.whitespacesAndNewlines) }.filter { !$0.isEmpty }
     }
+    @discardableResult func addVocabulary(_ word: String) -> Bool {
+        let clean=word.trimmingCharacters(in:.whitespacesAndNewlines)
+        guard (1...40).contains(clean.count),!clean.contains(","),!clean.contains(where:\.isNewline),
+              !vocabulary.contains(where:{ $0.caseInsensitiveCompare(clean) == .orderedSame }) else { return false }
+        vocabularyText=(vocabulary+[clean]).joined(separator:", "); return true
+    }
+    @discardableResult func removeVocabulary(_ word: String) -> Bool {
+        let kept=vocabulary.filter { $0.caseInsensitiveCompare(word.trimmingCharacters(in:.whitespacesAndNewlines)) != .orderedSame }
+        guard kept.count<vocabulary.count else { return false }
+        vocabularyText=kept.joined(separator:", "); return true
+    }
     @Published var voiceSleeping = false
     @Published var recording = false
     @Published var closeWhenDone = UserDefaults.standard.object(forKey:"closeWhenDone") as? Bool ?? true {
@@ -865,7 +876,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
     func qaStatus() -> [String:Any] {
-        ["phase":state.phase,"detail":state.detail,"busy":state.busy,"dictating":state.dictating,"sleeping":state.voiceSleeping,"recording":state.recording,"command":state.command,"interpreted":state.interpreted,
+        let front=NSWorkspace.shared.frontmostApplication
+        return ["bound":voiceEditor.target.map { [Int($0.pid),$0.window] } ?? [],
+         "front":front.map { [Int($0.processIdentifier),HostKeyboard.frontWindow(pid:$0.processIdentifier,bundle:$0.bundleIdentifier) ?? -1] } ?? [],
+         "phase":state.phase,"detail":state.detail,"busy":state.busy,"dictating":state.dictating,"sleeping":state.voiceSleeping,"recording":state.recording,"command":state.command,"interpreted":state.interpreted,
          "pending":commands.pending.count,"completedAt":state.completedAt.timeIntervalSince1970]
     }
     func ack(_ token: UUID) {

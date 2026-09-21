@@ -4,6 +4,9 @@ import ApplicationServices
 enum VoiceEditCommand: Equatable {
     case start, end, insert(String), scratch, select(String), replace(String,String), beginning, endOfDocument
     case saveAs(String), openApp(String), key(String), help
+    case press(KeyChord), selectRelative(TextUnit,TextDirection,Int), deleteRelative(TextUnit,TextDirection,Int)
+    case selectThat, deleteThat, selectAll, transformThat(TextCase), insertAt(before:Bool,String), spell(String)
+    case addWord(String?), removeWord(String)
     static func parse(_ text: String) -> VoiceEditCommand? {
         let clean=text.trimmingCharacters(in:.whitespacesAndNewlines)
         let normalized=VoiceCommandQueue.normalized(clean)
@@ -25,8 +28,23 @@ enum VoiceEditCommand: Equatable {
         case "move down","press down arrow": return .key("down")
         case "page down","scroll down": return .key("pagedown")
         case "page up","scroll up": return .key("pageup")
+        case "select that": return .selectThat
+        case "delete that": return .deleteThat
+        case "select all": return .selectAll
+        case "capitalize that","cap that","caps that": return .transformThat(.capitalized)
+        case "all caps that","uppercase that": return .transformThat(.uppercase)
+        case "no caps that","lowercase that": return .transformThat(.lowercase)
+        case "add that to vocabulary","add that to my vocabulary","add that to the vocabulary","add that word",
+             "add that to my words","add that to dictionary","add that to my dictionary": return .addWord(nil)
         default: break
         }
+        let words=normalized.split(separator:" ").map(String.init)
+        if let first=words.first,["press","hit"].contains(first),words.count>1,let chord=KeyChord.parse(Array(words.dropFirst())) { return .press(chord) }
+        if words.first=="spell",words.count>1 {
+            if let spelled=Spelling.parse(Array(words.dropFirst())) { return .spell(spelled) }
+            return nil
+        }
+        if let relative=Self.relative(normalized) { return relative }
         let apps=["textedit":"com.apple.TextEdit","safari":"com.apple.Safari","finder":"com.apple.finder",
                   "calculator":"com.apple.calculator","google chrome":"com.google.Chrome","notes":"com.apple.Notes","mail":"com.apple.mail"]
         for (name,bundle) in apps where ["open "+name,"switch to "+name,"launch "+name].contains(normalized) { return .openApp(bundle) }
@@ -45,10 +63,27 @@ enum VoiceEditCommand: Equatable {
         }
         if let p=parts("^(?:replace|change) (.+?) (?:with|to) (.+)$") { return .replace(argument(p[0]),argument(p[1])) }
         if let p=parts("^select (.+)$") { return .select(argument(p[0])) }
+        if let p=parts("^insert (before|after) (.+)$") { return .insertAt(before:p[0].lowercased()=="before",argument(p[1])) }
+        if let p=parts(#"^add (?:the )?word (.+)$"#) ?? parts(#"^add (.+) to (?:my |the )?(?:vocabulary|dictionary|word list)[.!]?$"#) { return .addWord(argument(p[0])) }
+        if let p=parts(#"^remove (?:the )?word (.+)$"#) ?? parts(#"^remove (.+) from (?:my |the )?(?:vocabulary|dictionary|word list)[.!]?$"#) { return .removeWord(argument(p[0])) }
         // Paths are literal. Do not remove a final dot from an actual filename.
         if let p=parts("^save(?: (?:it|this|the document))? as (.+)$") { return .saveAs(p[0].trimmingCharacters(in:CharacterSet(charactersIn:"\"“”"))) }
         if let p=parts("^(?:type exactly|literal text) (.+)$") { return .insert(p[0]) }
         return nil
+    }
+    /// "select the last three words", "delete next sentence", "select previous paragraph".
+    static func relative(_ normalized:String) -> VoiceEditCommand? {
+        let pattern=#"^(select|delete) (?:the )?(previous|last|next) (?:(\d+|one|two|three|four|five|six|seven|eight|nine|ten) )?(word|sentence|paragraph)s?$"#
+        guard let regex=try? NSRegularExpression(pattern:pattern),
+              let match=regex.firstMatch(in:normalized,range:NSRange(normalized.startIndex...,in:normalized)) else { return nil }
+        func part(_ index:Int) -> String? {
+            match.range(at:index).location==NSNotFound ? nil : (normalized as NSString).substring(with:match.range(at:index))
+        }
+        let counts=["one":1,"two":2,"three":3,"four":4,"five":5,"six":6,"seven":7,"eight":8,"nine":9,"ten":10]
+        let count=part(3).flatMap { Int($0) ?? counts[$0] } ?? 1
+        guard (1...20).contains(count),let unit=part(4).flatMap(TextUnit.init) else { return nil }
+        let direction:TextDirection=part(2)=="next" ? .next : .previous
+        return part(1)=="select" ? .selectRelative(unit,direction,count) : .deleteRelative(unit,direction,count)
     }
     /// During dictation, a phrase that only resembles a command is typed instead, as Dragon and
     /// Voice Control do: "Select the best option" is text unless that phrase is in the document.
@@ -56,7 +91,7 @@ enum VoiceEditCommand: Equatable {
     func isProse(in document: String?) -> Bool {
         switch self {
         case .saveAs(let path): return !path.hasPrefix("/") && !path.hasPrefix("~")
-        case .select(let phrase),.replace(let phrase,_):
+        case .select(let phrase),.replace(let phrase,_),.insertAt(_,let phrase):
             guard let document else { return false }
             return (document as NSString).range(of:phrase,options:.caseInsensitive).location==NSNotFound
         default: return false
@@ -198,7 +233,43 @@ final class VoiceEditor {
             if case .replace(_,let replacement)=command { try insert(replacement,pid:pid,window:window,spacing:false) }
         case .beginning: try Self.selectRange(NSRange(location:0,length:0),field:element)
         case .endOfDocument: try Self.selectRange(NSRange(location:text.utf16.count,length:0),field:element)
+        case .selectAll: try Self.requireFront(pid:pid,window:window);try Self.selectRange(NSRange(location:0,length:text.utf16.count),field:element)
+        case .selectRelative(let unit,let direction,let count),.deleteRelative(let unit,let direction,let count):
+            guard let selection=Self.selection(element),var range=TextCommands.range(unit,direction,count,in:text,selection:selection) else {
+                throw Self.problem("There is no \(unit.rawValue) \(direction == .next ? "after" : "before") the cursor.")
+            }
+            if case .deleteRelative=command { range=TextCommands.forDeletion(range,in:text) }
+            try Self.requireFront(pid:pid,window:window);try Self.selectRange(range,field:element)
+            if case .deleteRelative=command { try insert("",pid:pid,window:window,spacing:false) }
+        case .selectThat,.deleteThat,.transformThat:
+            guard var range=thatRange(element,text:text,pid:pid,window:window) else {
+                throw Self.problem("Nothing to change yet. Select the words first, or dictate something.")
+            }
+            if case .deleteThat=command { range=TextCommands.forDeletion(range,in:text) }
+            try Self.requireFront(pid:pid,window:window);try Self.selectRange(range,field:element)
+            if case .deleteThat=command { try insert("",pid:pid,window:window,spacing:false) }
+            if case .transformThat(let style)=command {
+                try insert(TextCommands.transform((text as NSString).substring(with:range),style),pid:pid,window:window,spacing:false)
+            }
+        case .insertAt(let before,let phrase):
+            guard let range=Self.uniqueRange(phrase,in:text) else { throw Self.problem("That text is missing or appears more than once. Say a longer, unique phrase.") }
+            try Self.requireFront(pid:pid,window:window)
+            try Self.selectRange(NSRange(location:before ? range.location : NSMaxRange(range),length:0),field:element)
         default: break
         }
+    }
+    /// "That" is the selection, else NotchPilot's own last edit if the document is unchanged since.
+    func thatRange(_ element:AXUIElement,text:String,pid:pid_t,window:Int) -> NSRange? {
+        if let selection=Self.selection(element),selection.length>0 { return selection }
+        guard let last=history.last,last.pid==pid,last.window==window,CFEqual(last.field,element),last.after==text else { return nil }
+        return NSRange(location:last.range.location,length:last.inserted.utf16.count)
+    }
+    func thatText(pid:pid_t,window:Int) throws -> String {
+        let element=try field(pid:pid,window:window)
+        guard let text=HostKeyboard.attribute(element,kAXValueAttribute) as? String,
+              let range=thatRange(element,text:text,pid:pid,window:window) else {
+            throw Self.problem("Nothing to add yet. Select or spell the word first.")
+        }
+        return (text as NSString).substring(with:range).trimmingCharacters(in:.whitespacesAndNewlines.union(.punctuationCharacters))
     }
 }

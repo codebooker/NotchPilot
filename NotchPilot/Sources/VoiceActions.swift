@@ -36,6 +36,8 @@ extension AppDelegate {
                 state.dictating=false;speech?.setDictation(false);voiceEditor.target=nil
                 finishVoiceAction("Opened "+(opened.localizedName ?? "the app")+". Ready for your next request.",token:token);return
             }
+            if case .addWord(let word?)=command { finishVocabulary(word,add:true,token:token);return }
+            if case .removeWord(let word)=command { finishVocabulary(word,add:false,token:token);return }
             let currentTarget=targetApp.flatMap { app in targetWindowID.map { (pid:app.processIdentifier,window:$0) } }
             var keptAsText=false
             if state.dictating,let parsed=command,let bound=voiceEditor.target,
@@ -53,6 +55,14 @@ extension AppDelegate {
                 SaveRecovery.key(code,flags:name=="backtab" ? .maskShift : [])
                 finishVoiceAction("Key sent to the current window.",token:token);return
             }
+            if case .press(let chord)=command {
+                try VoiceEditor.requireFront(pid:pid,window:window)
+                SaveRecovery.key(chord.code,flags:chord.flags)
+                finishVoiceAction("Pressed \(chord.label).",token:token);return
+            }
+            if case .addWord(nil)=command {
+                finishVocabulary(try voiceEditor.thatText(pid:pid,window:window),add:true,token:token);return
+            }
             if command == .start {
                 _=try voiceEditor.field(pid:pid,window:window)
                 voiceEditor.target=destination;state.dictating=true;speech?.setDictation(true)
@@ -66,7 +76,8 @@ extension AppDelegate {
                 finishVoiceAction("Saved and verified: "+saved.path,token:token)
                 return
             }
-            let selected=command ?? .insert(goal)
+            var selected=command ?? .insert(goal)
+            if case .spell(let word)=selected { selected = .insert(word) }
             if case .insert(let text)=selected {
                 let literal=["type exactly ","literal text "].contains { goal.lowercased().hasPrefix($0) }
                 try voiceEditor.insert(text,pid:pid,window:window,spacing:!literal)
@@ -81,6 +92,13 @@ extension AppDelegate {
         }
         }
         return true
+    }
+    func finishVocabulary(_ word:String,add:Bool,token:UUID) {
+        let changed=add ? state.addVocabulary(word) : state.removeVocabulary(word)
+        let name="“"+word.trimmingCharacters(in:.whitespacesAndNewlines)+"”"
+        let result=add ? (changed ? "Added \(name) to your vocabulary." : "\(name) is already in your vocabulary, or is not a single word or name.")
+                       : (changed ? "Removed \(name) from your vocabulary." : "\(name) is not in your vocabulary.")
+        finishVoiceAction(result,token:token)
     }
     /// Dictation keeps listening after a failed phrase; sentences spoken after it stay queued.
     func dictationProblem(_ message:String,token:UUID) {

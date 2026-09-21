@@ -31,6 +31,15 @@ Pause between phrases using your chosen one-, two-, or three-second delay. You d
 | **Select purple bike** | Select a unique matching phrase, ignoring case. |
 | **Replace purple with blue** / **Change purple to blue** | Replace a unique phrase and verify the resulting text. |
 | **Scratch that** | Reverse the last recorded dictation edit, if the document still matches its result. |
+| **Select previous word** / **Select the last 3 words** / **Select next sentence** / **Select previous paragraph** | Select by words (with attached punctuation), sentences, or paragraphs before or after the cursor. |
+| **Delete last word** / **Delete the previous 2 words** / **Delete next sentence** | Remove them, plus one space that would otherwise be left over. |
+| **Select that** / **Delete that** | “That” is your selection, or NotchPilot's last edit if the document has not changed since. |
+| **Capitalize that** / **All caps that** / **No caps that** | Capitalize each word, uppercase, or lowercase “that”. |
+| **Select all** | Select the whole document. |
+| **Insert before [words]** / **Insert after [words]** | Put the cursor next to a unique phrase. |
+| **Spell c a t** / **Spell cap j o h n** / **Spell all caps n a s a** | Type letters, NATO words (“Charlie Alpha Tango”), digits, and dash, dot, at, underscore, slash. Whisper often hears letters as words (“see a tea”); both work. |
+| **Add that to vocabulary** / **Add the word Siobhan** / **Remove the word Siobhan** | Edit Words to recognize. “That” works after spelling a word. |
+| **Press command shift S** / **Hit escape** / **Press F5** | Press any key with command, shift, option, or control, including arrows, Home/End, and F1–F12. |
 | **Go to beginning** / **Go to end** | Move the caret to the document boundary. |
 | **Type exactly …** / **Literal text …** | Insert the remaining transcript literally, including command-like words. |
 | **Next field** / **Previous field** | Tab / Shift–Tab in the current window. |
