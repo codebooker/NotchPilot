@@ -14,7 +14,7 @@ enum VoiceHelp {
         ("Edit", ["Select purple bike","Select previous word","Delete that","Replace purple with blue","Capitalize that","Insert after little","Select all"]),
         ("Point", ["Show numbers","Click 5","Click Save","Mouse grid","Double click","Right click"]),
         ("Keys and apps", ["Press command S","Next field","Open Safari","Save as Note on my desktop","Add that to vocabulary"]),
-        ("Listen", ["Read that","Go to sleep","Wake up","Cancel that","Stop"])]
+        ("Listen", ["Read that","Go to sleep","Wake up","Cancel that","Stop","Voice check"])]
     static var text: String { sections.map { $0.0+": "+$0.1.joined(separator:" · ") }.joined(separator:"\n") }
 }
 

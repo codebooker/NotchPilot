@@ -63,6 +63,12 @@ These routes do not call an online model. Other app requests still use the confi
 
 While dictating, a sentence that only *resembles* a command is typed as text, as in Dragon and Voice Control. “Select the best option for your family” or “Change is hard to accept” becomes prose unless its target words already appear in the document, and “Save as much as you can” becomes prose because it names no destination. The Commands and activity window notes when this happens; say **scratch that** if you meant the command. A command whose target does appear still runs, so “Change is hard to accept” in a document that already contains “is hard” is still a replacement. Scratch that reverses it.
 
+## Voice check
+
+Say **voice check**, or choose **Settings → Everyday → Voice check → Start**. NotchPilot shows 12 short phrases, one at a time: seven commands, three dictation sentences, and two corrections. Read each aloud and pause. While the check runs, nothing you say is acted on; each phrase is scored instead. Say **try again** after a stumble, **skip** to move on, or **stop voice check** to finish early.
+
+A command counts as understood when it would run the same command (“Click 7.” for “Click seven”); dictation must match word for word. The results show how many phrases were understood, the share of misheard words, recognition time after your pause, and your speaking level. Phrase levels also set the baseline for **Ignore quieter voices**. Results are saved as text, without audio, in `.cache/voice-checks/` in the runtime folder, so a developer can compare real speech across changes. Run it somewhere quiet: other voices in the room are heard too.
+
 ## Pointing without a mouse
 
 **Show numbers** reads the front window through Accessibility and labels up to 200 visible controls in reading order. Nothing is clicked until you say a number. Before a click, NotchPilot checks that the same app is still in front and the control has not moved; otherwise it asks you to show numbers again. The NotchPilot cursor travels to the target so you can see where the click goes. Buttons are pressed through Accessibility where they support it, which does not move your mouse pointer. Other controls, double clicks, and the grid use a real mouse click at the target.

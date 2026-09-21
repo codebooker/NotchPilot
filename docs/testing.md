@@ -56,6 +56,8 @@ NotchPilot/build/session-tests
 
 Tests cover recognizer timeout/cancellation, dictation command parsing, unique Unicode selection ranges, continuous voice recovery, auto-close, draft/queue handling, review pause/resume, closing a paused worker, stale callbacks, exact input guards, and cursor timing/edge placement. The app’s global keyboard implementation intentionally avoids an all-key event monitor, which previously caused doubled physical keystrokes.
 
+The app itself can render the voice check without a microphone: `NotchPilot.app/Contents/MacOS/NotchPilot --render-voice-check [--preview-finished] /tmp/check.png`. Previews never save results.
+
 Add `--overlay-preview /tmp/np-overlay` to also write the numbers and grid overlays as `-numbers.png` and `-grid.png`.
 
 For a rendered cursor preview:

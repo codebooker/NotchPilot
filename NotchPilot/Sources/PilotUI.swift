@@ -354,6 +354,16 @@ struct PreferencesView: View {
                         .font(.system(size:13)).foregroundStyle(PilotStyle.secondary)
                 }
                 Divider()
+                HStack(alignment:.center,spacing:12) {
+                    VStack(alignment:.leading,spacing:4) {
+                        Text("Voice check").font(.system(size:14,weight:.medium))
+                        Text("Read 12 short phrases to see how well NotchPilot hears you. Results stay on this Mac.")
+                            .font(.system(size:13)).foregroundStyle(PilotStyle.secondary)
+                    }
+                    Spacer()
+                    Button("Start") { state.startVoiceCheck?() }.disabled(state.busy)
+                }
+                Divider()
                 Toggle("Ignore quieter voices",isOn:$state.ignoreQuieterVoices).toggleStyle(.switch)
                 Text("Experimental. After a few phrases, speech much quieter than yours, like a TV or someone across the room, is ignored. It can’t tell who is speaking.")
                     .font(.system(size:13)).foregroundStyle(PilotStyle.secondary)

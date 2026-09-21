@@ -164,7 +164,7 @@ import Foundation
         reader.setMuted(false)
         precondition(!reader.muted)
         // Every phrase the in-app help advertises must work.
-        let sessionPhrases=["Go to sleep","Wake up","Cancel that","Stop"]
+        let sessionPhrases=["Go to sleep","Wake up","Cancel that","Stop","Voice check"]
         for (_,examples) in VoiceHelp.sections {
             for phrase in examples where !sessionPhrases.contains(phrase) {
                 precondition(VoiceEditCommand.parse(phrase) != nil,"Help advertises a phrase that does not parse: "+phrase)
@@ -172,6 +172,30 @@ import Foundation
         }
         precondition(VoiceCommandQueue.isStop("Stop") && VoiceCommandQueue.isCancelTask("Cancel that"))
         precondition(VoiceHelp.text.contains("Show numbers") && VoiceHelp.text.components(separatedBy:"\n").count==VoiceHelp.sections.count)
+        // Voice check: score real speech against known phrases instead of acting on it.
+        precondition(VoiceCheck.wordErrorRate("Open Safari","open safari.")==0)
+        precondition(abs(VoiceCheck.wordErrorRate("a little boy rode his purple bike","A little boy rode his bike.")-1.0/7)<0.001,"One missing word of seven")
+        precondition(VoiceCheck.wordErrorRate("select previous word","")==1)
+        precondition(VoiceCheck.understood(VoiceCheck.Phrase("Click seven",dictation:false),heard:"Click 7."),"Commands count when they mean the same command")
+        precondition(!VoiceCheck.understood(VoiceCheck.Phrase("Replace purple with blue",dictation:false),heard:"Replace purple with glue."))
+        precondition(VoiceCheck.understood(VoiceCheck.Phrase("It had flames on it.",dictation:true),heard:"It had flames on it."))
+        precondition(!VoiceCheck.understood(VoiceCheck.Phrase("It had flames on it.",dictation:true),heard:"It had frames on it."))
+        precondition(VoiceCheck.control("Skip.") == .skip && VoiceCheck.control("Try again!") == .again)
+        precondition(VoiceCheck.control("Stop voice check.") == .stop && VoiceCheck.control("Open Safari") == nil)
+        precondition(VoiceCheck.standard.allSatisfy { $0.dictation || VoiceEditCommand.parse($0.text) != nil },"Every command phrase in the check is a real command")
+        var check=VoiceCheck(phrases:[VoiceCheck.Phrase("Open Safari",dictation:false),VoiceCheck.Phrase("It had flames on it.",dictation:true),VoiceCheck.Phrase("Show numbers",dictation:false)])
+        precondition(check.current?.text=="Open Safari" && !check.finished)
+        check.record(heard:"Open Safari.",seconds:0.8,level:-20)
+        check.record(heard:"It had frames on it.",seconds:1.2,level:-22)
+        precondition(check.results.map(\.understood)==[true,false] && check.current?.text=="Show numbers")
+        check.again()
+        precondition(check.results.count==1 && check.current?.text=="It had flames on it.","Try again re-reads the previous phrase")
+        check.record(heard:"It had flames on it.",seconds:1.0,level:-21)
+        check.skip()
+        precondition(check.finished && check.results.map(\.skipped)==[false,false,true])
+        let summary=check.summary
+        precondition(summary.understood==2 && summary.attempted==2 && summary.medianSeconds==0.9 && summary.medianLevel==(-20.5))
+        precondition(check.previousDictation==nil || check.previousDictation=="It had flames on it.")
         precondition(QAInbox(arguments:["NotchPilot"])==nil,"QA automation is off unless explicitly launched with --qa-inbox")
         let inboxDirectory=FileManager.default.temporaryDirectory.appendingPathComponent("qa-"+UUID().uuidString)
         try FileManager.default.createDirectory(at:inboxDirectory,withIntermediateDirectories:true)
@@ -434,6 +458,20 @@ import Foundation
                      "Speech awaiting transcription is kept")
         precondition(!owner.state.busy && owner.state.dictating && owner.state.needsAttention && owner.state.detail.contains("That text is missing."))
         owner.commands.cancel();owner.audioQueue=[];try? FileManager.default.removeItem(at:spoken)
+        // During a voice check, speech is scored and never run; stopping keeps what was measured.
+        owner.state.voiceCheck=VoiceCheck(phrases:[VoiceCheck.Phrase("Open Safari",dictation:false),VoiceCheck.Phrase("Show numbers",dictation:false),
+                                                  VoiceCheck.Phrase("Scratch that",dictation:false)])
+        owner.acceptInstruction("Open Safari.")
+        precondition(owner.commands.pending.isEmpty && owner.commands.active==nil && owner.state.voiceCheck?.results.count==1,"Scored, not run")
+        owner.acceptInstruction("Skip.")
+        precondition(owner.state.voiceCheck?.results.last?.skipped==true)
+        owner.acceptInstruction("Stop voice check")
+        precondition(owner.state.voiceCheck?.finished==true && owner.state.voiceCheck?.results.count==2,"Stopping keeps the results")
+        owner.state.busy=true // Queue without running, so the test never opens Safari.
+        owner.acceptInstruction("Open Safari")
+        precondition(owner.commands.pending==["Open Safari"],"After the check, requests are queued again")
+        owner.state.busy=false
+        owner.commands.cancel();owner.state.voiceCheck=nil
         print("Session tests passed: recovery, cancellation, continuous voice, auto-close, strip visibility, cursor easing, arrival gating, and fade cancellation.")
     }
 }

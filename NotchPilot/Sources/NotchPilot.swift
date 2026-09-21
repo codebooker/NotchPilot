@@ -37,6 +37,11 @@ final class PilotState: ObservableObject {
     var connectionProvider: String { engine == "cua" ? "openrouter" : provider }
     @Published var activityDetails = false
     @Published var showHelp = false
+    /// Active or finished voice check; nil when none is shown.
+    @Published var voiceCheck: VoiceCheck?
+    @Published var voiceCheckFile = ""
+    var startVoiceCheck: (() -> Void)?
+    var voiceCheckControl: ((VoiceCheck.Control) -> Void)?
     @Published var settingsPage = "Everyday"
     @Published var appearance = PilotAppearance(rawValue:UserDefaults.standard.string(forKey:"appearance") ?? "system") ?? .system {
         didSet { UserDefaults.standard.set(appearance.rawValue,forKey:"appearance");changeAppearance?() }
@@ -255,6 +260,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var levelGate = VoiceLevelGate()
     var pointing: Pointing?
     let speechOutput = SpeechOutput()
+    var voiceCheckWindow: NSWindow?
+    /// When each phrase finished and how loud it was, for voice-check timing.
+    var segmentInfo: [URL:(ended:Date,level:Double?)] = [:]
     var readingToken: UUID?
     let pointingOverlay = PointingOverlay()
 
@@ -296,6 +304,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             if self.state.recording { self.showPanel(key:false) } else { self.openVoice() }
         }
         state.changeAppearance = { [weak self] in self?.applyAppearance() }
+        state.startVoiceCheck = { [weak self] in self?.startVoiceCheck() }
+        state.voiceCheckControl = { [weak self] control in self?.controlVoiceCheck(control) }
         state.resumeWork = { [weak self] in self?.resumeReviewedWork() }
         state.changeSpeechPause = { [weak self] seconds in self?.speech?.setPause(seconds) }
         state.cancelTask = { [weak self] in self?.cancelCurrentTask() }
@@ -344,6 +354,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             showSettings()
             state.settingsPage=CommandLine.arguments.contains("--preview-setup") ? "Setup" : "Everyday"
             DispatchQueue.main.asyncAfter(deadline: .now()+0.7) { [weak self] in self?.renderPreview(settings:true) }
+        } else if CommandLine.arguments.contains("--render-voice-check") {
+            var sample=VoiceCheck()
+            sample.record(heard:"Open Safari.",seconds:0.7,level:-21)
+            sample.record(heard:"What can I say?",seconds:0.6,level:-22)
+            sample.record(heard:"Show number.",seconds:0.8,level:-20)
+            if CommandLine.arguments.contains("--preview-finished") {
+                while let phrase=sample.current { sample.record(heard:phrase.text,seconds:0.7,level:-21) }
+            }
+            state.voiceCheck=sample;state.recording=true;presentVoiceCheck()
+            DispatchQueue.main.asyncAfter(deadline: .now()+0.7) { [weak self] in self?.renderPreview(voiceCheck:true) }
         } else if CommandLine.arguments.contains("--render-activity") {
             state.showHelp=true;presentActivity()
             DispatchQueue.main.asyncAfter(deadline: .now()+0.7) { [weak self] in self?.renderPreview(activity:true) }
@@ -561,7 +581,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 capture.onSegment = { [weak self] url, epoch, level in
                     DispatchQueue.main.async {
                         guard let self, self.voiceGeneration == token, self.audioEpoch == epoch else { try? FileManager.default.removeItem(at:url); return }
-                        if let level, !self.levelGate.accepts(level), self.state.ignoreQuieterVoices {
+                        self.segmentInfo[url]=(Date(),level)
+                        if let level, !self.levelGate.accepts(level), self.state.ignoreQuieterVoices, self.state.voiceCheck?.finished != false {
                             try? FileManager.default.removeItem(at:url)
                             self.state.detail="Ignored a quieter voice. Speak as you usually do, or turn this off in Settings."; return
                         }
@@ -599,14 +620,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let token=voiceGeneration; let epoch=audioEpoch
         transcribing=true
         if !state.busy { state.phase="Listening · transcribing" }
-        whisperSession.transcribe(runtime:runtime,url:url,dictation:state.dictating,prompt:speechPrompt()) { [weak self] result in
+        // A voice check decodes each phrase the way real use would: commands with the command
+        // prompt, dictation sentences with the previous sentence as context.
+        let checking=state.voiceCheck.flatMap { $0.finished ? nil : $0.current }
+        let prompt=checking.map { SpeechText.prompt(dictation:$0.dictation,vocabulary:state.vocabulary,context:state.voiceCheck?.previousDictation ?? "") } ?? speechPrompt()
+        whisperSession.transcribe(runtime:runtime,url:url,dictation:checking?.dictation ?? state.dictating,prompt:prompt) { [weak self] result in
             try? FileManager.default.removeItem(at:url)
+            let info=self?.segmentInfo.removeValue(forKey:url)
             guard let self,self.voiceGeneration==token,self.audioEpoch==epoch else { return }
             self.transcribing=false;self.transcribingURL=nil
             switch result {
             case .failure(let error): self.fail(error.localizedDescription);return
             case .success(let text):
-                if !SpeechText.isNonSpeech(text,dictation:self.state.dictating) { self.acceptInstruction(SpeechText.applyVocabulary(text,self.state.vocabulary)) }
+                if self.state.voiceCheck?.finished == false {
+                    if !SpeechText.isNonSpeech(text) {
+                        self.recordVoiceCheck(SpeechText.applyVocabulary(text,self.state.vocabulary),seconds:info.map { Date().timeIntervalSince($0.ended) },level:info?.level ?? nil)
+                    }
+                } else if !SpeechText.isNonSpeech(text,dictation:self.state.dictating) { self.acceptInstruction(SpeechText.applyVocabulary(text,self.state.vocabulary)) }
             }
             self.transcribeNext()
         }
@@ -626,6 +656,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if ["go to sleep","pause listening"].contains(phrase) {
             cancelCurrentTask();state.voiceSleeping=true;state.detail="Paused. Say wake up or resume listening.";return true
         }
+        if ["voice check","start voice check","start a voice check","check my voice"].contains(phrase) { startVoiceCheck();return true }
         if ["wake up","resume listening"].contains(phrase) {
             state.voiceSleeping=false;state.phase="Listening";state.detail="I’m listening again.";return true
         }
@@ -637,6 +668,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return false
     }
     func acceptInstruction(_ text: String) {
+        if state.voiceCheck?.finished == false { recordVoiceCheck(text,seconds:nil,level:nil);return }
         guard !handleSessionInstruction(text) else { return }
         if !state.question.isEmpty { submitAnswer(text); return }
         guard commands.enqueue(text) else { fail("Command queue is full. Pending follow-ups were cleared; try again."); return }
@@ -915,6 +947,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func stop(close: Bool) {
         autoCloseGeneration=UUID()
         generation=UUID(); stopReading(); stopAudio(); planner.cancel();clearReview();hidePointing()
+        if state.voiceCheck?.finished == false { endVoiceCheck() }
         state.dictating=false;state.voiceSleeping=false;voiceEditor.target=nil;voiceEditor.history.removeAll()
         try? input?.fileHandleForWriting.close();task?.terminate(); task=nil; input=nil; commands.cancel(); dialogue=[]; originalGoal=""; resolvedGoal=""
         state.question=""; state.answer=""; state.interpreted=""; state.requestDraft=""
@@ -922,7 +955,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         hideCursor(); if close { panel.orderOut(nil);activityWindow?.orderOut(nil);preferences?.orderOut(nil);setEscapeShortcut(active:false) } else { showPanel(key:false) }
     }
     func autoCloseReady(at now: Date = Date()) -> Bool {
-        state.closeWhenDone && pointing==nil && !state.dictating && !state.voiceSleeping && !state.busy && !state.needsAttention && state.question.isEmpty && commands.active==nil && commands.pending.isEmpty &&
+        state.closeWhenDone && pointing==nil && state.voiceCheck?.finished != false && !state.dictating && !state.voiceSleeping && !state.busy && !state.needsAttention && state.question.isEmpty && commands.active==nil && commands.pending.isEmpty &&
         activityWindow?.isVisible != true && preferences?.isVisible != true &&
         !transcribing && audioQueue.isEmpty && speech?.hasPendingSpeech != true && now.timeIntervalSince(state.lastSpeech)>1.4
     }
@@ -1054,6 +1087,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         showPanel(key:false)
     }
     func windowWillClose(_ notification: Notification) {
+        if (notification.object as? NSWindow)===voiceCheckWindow {
+            if state.voiceCheck?.finished == false { endVoiceCheck() }
+            state.voiceCheck=nil;return
+        }
         if state.reviewing { resumeReviewedWork() }
     }
     @objc func showSettings() {
@@ -1097,8 +1134,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         NSApp.activate(ignoringOtherApps:true);activityWindow?.makeKeyAndOrderFront(nil)
     }
-    func renderPreview(settings: Bool = false, activity: Bool = false) {
-        guard let view=(activity ? activityWindow?.contentView : settings ? preferences?.contentView : panel.contentView), let bitmap=view.bitmapImageRepForCachingDisplay(in:view.bounds) else { NSApp.terminate(nil); return }
+    func renderPreview(settings: Bool = false, activity: Bool = false, voiceCheck: Bool = false) {
+        guard let view=(voiceCheck ? voiceCheckWindow?.contentView : activity ? activityWindow?.contentView : settings ? preferences?.contentView : panel.contentView), let bitmap=view.bitmapImageRepForCachingDisplay(in:view.bounds) else { NSApp.terminate(nil); return }
         view.cacheDisplay(in:view.bounds,to:bitmap)
         let path=CommandLine.arguments.last ?? "/tmp/notchpilot-preview.png"
         if let data=bitmap.representation(using:.png,properties:[:]) { try? data.write(to:URL(fileURLWithPath:path)) }
