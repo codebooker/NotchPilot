@@ -442,6 +442,10 @@ import Foundation
         precondition(owner.state.detail==beforeStaleKey,"Cancelled generations must never issue keyboard input")
         owner.receive(["event":"host_key","pid":-1,"key":"return"],token:owner.generation)
         precondition(owner.state.detail.contains("active app changed"),"Host keyboard input must reject a different foreground app")
+        precondition(!HostKeyboard.press(["role":"AXButton"],pid:-1),"A host press needs an observed role and frame")
+        let beforePress=owner.state.detail
+        owner.receive(["event":"host_press","pid":-1,"window_id":1,"press":["role":"AXButton","frame":["x":1,"y":1,"w":9,"h":9]]],token:owner.generation)
+        precondition(owner.state.detail==beforePress,"A press the host cannot do safely falls back to the Cua click instead of failing")
         // A hung recognizer must time out once; cancelled callbacks must never insert text.
         let stalled=Runtime(root:"",python:"",worker:"",whisper:"/bin/sleep",model:"10",vad:"/bin/sleep",vadModel:"10",planner:"",qwen:"",downloader:"")
         let recognizer=WhisperSession(requestTimeout:0.12)

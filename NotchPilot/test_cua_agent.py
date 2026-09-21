@@ -151,7 +151,7 @@ class BatchTests(unittest.TestCase):
 
 
 class ControllerTests(unittest.IsolatedAsyncioTestCase):
-    async def scenario(self,decisions,preview=False,changed_surface=False,interrupt=False,recorded_calls=None,effect=None,new_document=False,goal_override=None,cancel_checkpoint=None,empty_observations=0,target=None,editable=False):
+    async def scenario(self,decisions,preview=False,changed_surface=False,interrupt=False,recorded_calls=None,effect=None,new_document=False,goal_override=None,cancel_checkpoint=None,empty_observations=0,target=None,editable=False,framed=False,press_reply='continue'):
         calls=[] if recorded_calls is None else recorded_calls;events=[];requests=[];instances=[]
         class Driver:
             revision=0
@@ -173,7 +173,8 @@ class ControllerTests(unittest.IsolatedAsyncioTestCase):
                         return {'app_name':'Calculator','window_title':'Save','elements':[],'tree_markdown':''}
                     return {'app_name':'Calculator','window_title':'Calculator',
                         'tree_markdown':'- AXStaticText = "Unexpected dialog"' if changed_surface and self.revision>1 else '',
-                        'elements':[{'element_token':f's{self.revision}','label':'6','role':'AXTextArea' if new_document or editable else 'AXButton'},
+                        'elements':[{'element_token':f's{self.revision}','label':'6','role':'AXTextArea' if new_document or editable else 'AXButton',
+                                     **({'frame':{'x':10,'y':20,'w':48,'h':48},'actions':['AXPress']} if framed else {})},
                                     {'element_token':f't{self.revision}','label':'7','role':'AXButton'}]}
                 if name=='click':
                     if args['element_token'] not in (f's{self.revision}',f't{self.revision}'):raise RuntimeError('stale')
@@ -191,6 +192,8 @@ class ControllerTests(unittest.IsolatedAsyncioTestCase):
             if event=='checkpoint' and sum(e=='checkpoint' for e,_ in events)==cancel_checkpoint:
                 raise InterruptedError('Stopped while reviewing')
             if event=='host_key' and kw.get('key')=='n':instances[-1].new_window=True
+            if event=='host_press':return press_reply
+            return 'continue'
         with tempfile.TemporaryDirectory() as directory,patch.dict(os.environ,{'OPENROUTER_API_KEY':'fake'},clear=True),patch.object(cua,'Driver',Driver),patch('worker.apps',return_value={'0':{'name':'Calculator'}}),patch.object(cua.httpx,'AsyncClient',client):
             goal=goal_override or ('Create a new document and type 6' if new_document else 'Click 6 in Calculator')
             await cua.run(Path(directory),goal,lambda e,**kw:events.append((e,kw)),handshake,preview=preview,target=target)
@@ -315,6 +318,25 @@ class ControllerTests(unittest.IsolatedAsyncioTestCase):
     async def test_repeated_input_within_one_stage_still_stops(self):
         with self.assertRaisesRegex(RuntimeError,'repeating the same step'):
             await self.scenario([{'action':'click','element_token':f's{i}'} for i in range(1,4)],goal_override='Open Calculator')
+    async def test_button_clicks_use_the_host_press_without_the_cua_wait(self):
+        decisions=lambda:[{'action':'open_app','app':'Calculator'},{'action':'click','element_token':'s1','reason':'Click 6'},{'action':'done','reason':'Calculator shows 6'}]
+        calls,events,_=await self.scenario(decisions(),framed=True)
+        press=[fields for event,fields in events if event=='host_press']
+        self.assertEqual(len(press),1)
+        self.assertEqual(press[0]['press'],{'role':'AXButton','frame':{'x':10,'y':20,'w':48,'h':48},'label':'6'})
+        self.assertEqual((press[0]['pid'],press[0]['window_id']),(10,20))
+        self.assertNotIn('click',[name for name,_ in calls],'The host pressed it; Cua was not asked to click')
+        self.assertGreater([name for name,_ in calls].count('get_window_state'),1,'The result is still observed afterwards')
+    async def test_host_press_falls_back_to_cua_when_the_control_is_not_found(self):
+        calls,events,_=await self.scenario([{'action':'open_app','app':'Calculator'},{'action':'click','element_token':'s1','reason':'Click 6'},
+            {'action':'done','reason':'Calculator shows 6'}],framed=True,press_reply='fallback')
+        self.assertEqual([name for name,_ in events].count('host_press'),1)
+        self.assertEqual([name for name,_ in calls].count('click'),1)
+    async def test_controls_without_press_or_frame_keep_the_cua_click(self):
+        calls,events,_=await self.scenario([{'action':'open_app','app':'Calculator'},{'action':'click','element_token':'s1','reason':'Click 6'},
+            {'action':'done','reason':'Calculator shows 6'}])
+        self.assertNotIn('host_press',[name for name,_ in events])
+        self.assertEqual([name for name,_ in calls].count('click'),1)
     async def test_preview_does_not_launch_or_click(self):
         calls,events,_=await self.scenario([{'action':'open_app','app':'Calculator'}],preview=True)
         self.assertNotIn('launch_app',[name for name,_ in calls])

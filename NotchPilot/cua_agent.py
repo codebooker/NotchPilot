@@ -29,6 +29,9 @@ KEYS={'enter':('return',[]),'escape':('escape',[]),'tab':('tab',[]),
       'save':('s',['cmd']),'undo':('z',['cmd']),
       'go_to_folder':('g',['cmd','shift']),'open_selected':('o',['cmd'])}
 ACTIONS=['open_app','observe','click','key','type','scroll_down','scroll_up','done','blocked']
+# Cua's click waits about a second trying to verify each press. The signed host can press these
+# directly; the controller still observes the window afterwards.
+HOST_PRESSABLE=('AXButton','AXCheckBox','AXRadioButton','AXDisclosureTriangle')
 SCHEMA={'type':'object','additionalProperties':False,'properties':{
     'action':{'type':'string','enum':ACTIONS},'app':{'type':'string'},
     'window_id':{'type':'integer'},'element_token':{'type':'string'},
@@ -586,6 +589,13 @@ async def run(root,goal,emit,handshake,preview=False,allow_writer=False,context=
                         handshake('host_key',pid=pid,window_id=window_id,key=key_name,
                             command='cmd' in modifiers,shift='shift' in modifiers,focus=focus)
                         delivery={'effect':'unverifiable','route':'host_keyboard'}
+                    elif name=='click' and args.get('delivery_mode')=='background' and element.get('role') in HOST_PRESSABLE \
+                            and 'AXPress' in element.get('actions',[]) and isinstance(element.get('frame'),dict):
+                        pressed=time.perf_counter()
+                        reply=handshake('host_press',pid=pid,window_id=window_id,
+                            press={'role':element['role'],'frame':element['frame'],'label':element.get('label','')})
+                        metric('host.press',time.perf_counter()-pressed)
+                        delivery=await driver.call(name,**args) if reply=='fallback' else {'effect':'unverifiable','route':'host_press'}
                     else:delivery=await driver.call(name,**args)
                     last_typed_field=(pid,window_id,control_identity(element)) if kind=='type' else None
                     if delivery.get('effect')=='refused' or delivery.get('refusal'):
@@ -641,15 +651,20 @@ async def probe(path):
         windows=[w for w in app.get('windows',[]) if w.get('title')=='Calculator']
         if len(windows)!=1:raise RuntimeError('Calculator probe needs one unambiguous window.')
         pid=app['pid'];window_id=windows[0]['window_id']
-        front=await driver.call('bring_to_front',pid=pid,window_id=window_id)
+        try:front=await driver.call('bring_to_front',pid=pid,window_id=window_id)
+        except RuntimeError as error:front={'unverified':str(error)[:300]} # Background clicks do not need focus.
         snapshot=await driver.call('get_window_state',pid=pid,window_id=window_id,include_screenshot=False,include_accessibility_tree=True,max_elements=220,max_depth=20)
         results=[]
-        for label in ('All Clear','6'):
-            matches=[e for e in elements(snapshot).values() if e.get('label')==label and e.get('role')=='AXButton']
-            if len(matches)!=1:raise RuntimeError('Probe control is ambiguous')
-            result=await driver.call('click',pid=pid,window_id=window_id,element_token=matches[0]['element_token'],delivery_mode='background')
-            results.append({'label':label,'result':result})
+        # Time each click variant; the display is read back after every click.
+        for label,extra in (('All Clear',{}),('6',{}),('6',{'action':'press'}),('6',{'delivery_mode':'foreground'}),('All Clear',{'action':'press'})):
+            matches=[e for e in elements(snapshot).values() if e.get('label') in (label,'Clear' if label=='All Clear' else label) and e.get('role')=='AXButton']
+            if len(matches)!=1:raise RuntimeError('Probe control is ambiguous: '+str(sorted({str(e.get('label')) for e in elements(snapshot).values()}))[:600])
+            started=time.perf_counter()
+            result=await driver.call('click',**{'pid':pid,'window_id':window_id,'element_token':matches[0]['element_token'],'delivery_mode':'background',**extra})
+            seconds=time.perf_counter()-started
             snapshot=await driver.call('get_window_state',pid=pid,window_id=window_id,include_screenshot=False,include_accessibility_tree=True,max_elements=220,max_depth=20)
+            shown=[line.strip() for line in snapshot.get('tree_markdown','').splitlines() if 'AXStaticText' in line][:2]
+            results.append({'label':label,'options':extra,'seconds':round(seconds,3),'display':shown,'result':result})
         Path(path).write_text(json.dumps({'permissions':permissions,'app':app,'front':front,'actions':results,'snapshot':snapshot},indent=2))
 
 

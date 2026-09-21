@@ -1,0 +1,13 @@
+{
+  "date": "2026-09-21",
+  "note": "Controller seconds from .cache/notchpilot-performance.jsonl on one Mac, Calculator already open. Excludes speech and local interpretation.",
+  "driver_click_probe_seconds": {"default": 1.03, "action_press": 1.03, "foreground": 1.17, "effect": "unverifiable", "route": "accessibility"},
+  "local_calculation_route": {
+    "before_cua_click": [{"clicks": 5, "total": 11.12, "click_seconds": 5.83}, {"clicks": 6, "total": 12.76, "click_seconds": 6.75}, {"clicks": 22, "total": 35.27, "click_seconds": 23.51}],
+    "after_host_press": {"clicks": 5, "total": 3.28, "press_seconds": 0.12, "cursor_seconds": 1.62, "result": "Verified 6×7 = 42"}
+  },
+  "model_route": {
+    "before": {"model_calls": 3, "model_seconds": 18.2, "clicks": 7, "click_seconds": 7.8, "total": 32.6},
+    "after_host_press": {"model_calls": 2, "model_seconds": 7.76, "clicks": 5, "press_seconds": 0.12, "cursor_seconds": 1.62, "total": 10.6, "cost_usd": 0.0029, "result": "Verified 12 ÷ 4 = 3"}
+  }
+}

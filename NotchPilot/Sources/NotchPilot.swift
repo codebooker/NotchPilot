@@ -355,7 +355,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         if let inbox=QAInbox(arguments:CommandLine.arguments) {
             // Live tests submit typed instructions. The microphone stays off unless --qa-listen is also given.
-            qaInbox=inbox;showPanel(key:false)
+            qaInbox=inbox;showPanel(key:false);checkHelperPermissions(request:false)
             inbox.start(submit:{ [weak self] in self?.acceptInstruction($0) },status:{ [weak self] in self?.qaStatus() ?? [:] })
             if CommandLine.arguments.contains("--qa-listen") { DispatchQueue.main.asyncAfter(deadline:.now()+0.4) { [weak self] in self?.openVoice() } }
         } else if CommandLine.arguments.contains("--render-settings") {
@@ -922,6 +922,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 voiceEditor.record(try HostKeyboard.insertText(text,spec:field,pid:front.processIdentifier,window:window,spacing:event["spacing"] as? Bool == true))
                 ack(token)
             } catch { fail(error.localizedDescription) }
+        case "host_press":
+            // Only the exact observed control in the front window; anything else goes back to Cua.
+            guard let pid=event["pid"] as? Int,let window=event["window_id"] as? Int,let spec=event["press"] as? [String:Any],
+                  let front=NSWorkspace.shared.frontmostApplication,Int(front.processIdentifier)==pid,
+                  HostKeyboard.windowIsFront(window,pid:front.processIdentifier,bundle:front.bundleIdentifier),
+                  HostKeyboard.press(spec,pid:front.processIdentifier) else { reply("fallback",token:token);return }
+            ack(token)
         case "host_key":
             guard let pid=event["pid"] as? Int,
                   let front=NSWorkspace.shared.frontmostApplication,Int(front.processIdentifier) == pid,
@@ -975,9 +982,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
          }(),
          "pending":commands.pending.count,"completedAt":state.completedAt.timeIntervalSince1970]
     }
-    func ack(_ token: UUID) {
+    func ack(_ token: UUID) { reply("continue",token:token) }
+    func reply(_ text: String, token: UUID) {
         guard generation==token, task?.isRunning==true else { return }
-        input?.fileHandleForWriting.write(Data("continue\n".utf8))
+        input?.fileHandleForWriting.write(Data((text+"\n").utf8))
     }
     func hideCursor() { cursorMotion?.hide();cursor?.orderOut(nil) }
     func discardPendingAudio() {

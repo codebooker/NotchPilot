@@ -9,16 +9,17 @@ enum HostKeyboard {
         return AXUIElementCopyAttributeValue(element,name as CFString,&value) == .success ? value : nil
     }
 
-    static func focus(_ spec: [String:Any], pid: pid_t) -> Bool {
-        guard let role=spec["role"] as? String,["AXTextArea","AXTextField","AXComboBox"].contains(role),
+    /// The unique element in the focused window with an observed role and frame (within 2 points).
+    static func observed(_ spec: [String:Any], pid: pid_t, roles: Set<String>, limit: Int) -> AXUIElement? {
+        guard let role=spec["role"] as? String,roles.contains(role),
               let frame=spec["frame"] as? [String:Double],
-              let x=frame["x"],let y=frame["y"],let w=frame["w"],let h=frame["h"],w>0,h>0 else { return false }
+              let x=frame["x"],let y=frame["y"],let w=frame["w"],let h=frame["h"],w>0,h>0 else { return nil }
         let app=AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(app,0.05)
-        guard let raw=attribute(app,kAXFocusedWindowAttribute),CFGetTypeID(raw)==AXUIElementGetTypeID() else { return false }
+        guard let raw=attribute(app,kAXFocusedWindowAttribute),CFGetTypeID(raw)==AXUIElementGetTypeID() else { return nil }
         var nodes=[raw as! AXUIElement];var matches=[AXUIElement]();var count=0
         let deadline=Date().addingTimeInterval(1)
-        while !nodes.isEmpty && count<300 && Date()<deadline {
+        while !nodes.isEmpty && count<limit && Date()<deadline {
             let node=nodes.removeFirst();count+=1
             if attribute(node,kAXRoleAttribute) as? String == role,
                let p=attribute(node,kAXPositionAttribute),let s=attribute(node,kAXSizeAttribute),
@@ -29,9 +30,20 @@ enum HostKeyboard {
             }
             nodes.append(contentsOf:(attribute(node,kAXChildrenAttribute) as? [AXUIElement] ?? []).prefix(100))
         }
-        guard matches.count==1,AXUIElementSetAttributeValue(matches[0],kAXFocusedAttribute as CFString,kCFBooleanTrue) == .success,
-              let focused=attribute(app,kAXFocusedUIElementAttribute) else { return false }
-        return CFEqual(focused,matches[0])
+        return matches.count==1 ? matches[0] : nil
+    }
+    static func focus(_ spec: [String:Any], pid: pid_t) -> Bool {
+        guard let element=observed(spec,pid:pid,roles:["AXTextArea","AXTextField","AXComboBox"],limit:300),
+              AXUIElementSetAttributeValue(element,kAXFocusedAttribute as CFString,kCFBooleanTrue) == .success,
+              let focused=attribute(AXUIElementCreateApplication(pid),kAXFocusedUIElementAttribute) else { return false }
+        return CFEqual(focused,element)
+    }
+    /// Presses a button the controller just observed, without Cua's post-press verification wait.
+    /// The controller still observes the window afterwards.
+    static func press(_ spec: [String:Any], pid: pid_t) -> Bool {
+        guard let element=observed(spec,pid:pid,roles:["AXButton","AXCheckBox","AXRadioButton","AXDisclosureTriangle"],limit:1500),
+              attribute(element,kAXEnabledAttribute) as? Bool != false else { return false }
+        return AXUIElementPerformAction(element,kAXPressAction as CFString) == .success
     }
 
     static func windowIsFront(_ expected: Int, pid: pid_t, bundle: String?) -> Bool {

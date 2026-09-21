@@ -87,6 +87,10 @@ Use disposable documents. Read results from the target app, not only from `statu
 
 Synthesizes clips with `say` and system sounds, then decodes them with and without a prompt: sentence continuity, vocabulary, spelled letters, and noise labels. Synthesized speech is a sanity check, not a microphone study.
 
+## Cua click timing probe
+
+`open -n NotchPilot/build/NotchPilot.app --args --probe-cua /tmp/probe.json` clicks Calculator's All Clear and 6 through the Cua driver in several delivery variants and records seconds per click. Launch it with `open` so it runs under NotchPilot's own permissions; launched from a terminal it inherits the terminal's (usually no Accessibility). No model call is made.
+
 ## Early-command timing
 
 ```sh
