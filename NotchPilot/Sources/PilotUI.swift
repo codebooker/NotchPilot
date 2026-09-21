@@ -345,6 +345,9 @@ struct PreferencesView: View {
                     }.pickerStyle(.segmented).tint(PilotStyle.accent).labelsHidden()
                     Text("Choose a longer pause if you like to think between words. Changes apply to your next phrase.")
                         .font(.system(size:13)).foregroundStyle(PilotStyle.secondary)
+                    Toggle("Respond sooner to short commands",isOn:$state.earlyCommands).toggleStyle(.switch).padding(.top,4)
+                    Text("Commands like “stop”, “scratch that”, and grid numbers run partway through the pause. Longer requests always wait for the full pause.")
+                        .font(.system(size:13)).foregroundStyle(PilotStyle.secondary)
                 }
                 Divider()
                 VStack(alignment:.leading,spacing:8) {

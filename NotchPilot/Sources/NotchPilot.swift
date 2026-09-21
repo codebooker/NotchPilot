@@ -72,6 +72,10 @@ final class PilotState: ObservableObject {
         didSet { UserDefaults.standard.set(localInterpreter,forKey:"localInterpreter") }
     }
     @Published var dictating = false
+    @Published var earlyCommands = UserDefaults.standard.object(forKey:"earlyCommands") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(earlyCommands,forKey:"earlyCommands"); changeEarlyCommands?(earlyCommands) }
+    }
+    var changeEarlyCommands: ((Bool) -> Void)?
     @Published var ignoreQuieterVoices = UserDefaults.standard.bool(forKey:"ignoreQuieterVoices") {
         didSet { UserDefaults.standard.set(ignoreQuieterVoices,forKey:"ignoreQuieterVoices") }
     }
@@ -264,6 +268,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var voiceCheckWindow: NSWindow?
     /// When each phrase finished and how loud it was, for voice-check timing.
     var segmentInfo: [URL:(ended:Date,level:Double?)] = [:]
+    /// Stand-in recognizer for tests; nil uses the resident Whisper helper.
+    var transcriber: ((URL,Bool,String,@escaping (Result<String,Error>) -> Void) -> Void)?
     var readingToken: UUID?
     let pointingOverlay = PointingOverlay()
 
@@ -309,6 +315,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         state.voiceCheckControl = { [weak self] control in self?.controlVoiceCheck(control) }
         state.resumeWork = { [weak self] in self?.resumeReviewedWork() }
         state.changeSpeechPause = { [weak self] seconds in self?.speech?.setPause(seconds) }
+        state.changeEarlyCommands = { [weak self] on in self?.speech?.setEarlyCommands(on) }
         state.cancelTask = { [weak self] in self?.cancelCurrentTask() }
         state.clearQueue = { [weak self] in self?.clearWaitingRequests() }
         state.addFollowUp = { [weak self] in self?.runCommand() }
@@ -577,37 +584,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 self.startingVoice=false
                 guard granted else { self.fail("Enable Microphone access in Settings."); return }
                 let capture=SpeechCapture()
-                capture.pauseDuration=self.state.speechPause
-                capture.segmentEpoch = self.audioEpoch
-                capture.onSegment = { [weak self] url, epoch, level in
-                    DispatchQueue.main.async {
-                        guard let self, self.voiceGeneration == token, self.audioEpoch == epoch else { try? FileManager.default.removeItem(at:url); return }
-                        self.segmentInfo[url]=(Date(),level)
-                        let known=self.levelGate.levels.count
-                        if let level, !self.levelGate.accepts(level), self.state.ignoreQuieterVoices, self.state.voiceCheck?.finished != false {
-                            try? FileManager.default.removeItem(at:url)
-                            self.state.detail="Ignored a quieter voice. Speak as you usually do, or turn this off in Settings."; return
-                        }
-                        if self.levelGate.levels.count != known || known==20 { UserDefaults.standard.set(self.levelGate.levels,forKey:"voiceLevels") }
-                        guard self.audioQueue.count < 8 else { try? FileManager.default.removeItem(at:url); self.fail("Speech queue is full. Please let the current instructions finish."); return }
-                        self.audioQueue.append(url); self.transcribeNext()
-                    }
-                }
-                capture.onLevel = { [weak self] level in
-                    DispatchQueue.main.async {
-                        guard let self, self.voiceGeneration == token else { return }
-                        self.state.level=level
-                    }
-                }
-                capture.onVoiceActivity = { [weak self] in
-                    DispatchQueue.main.async {
-                        guard let self, self.voiceGeneration == token else { return }
-                        self.state.lastSpeech=Date()
-                    }
-                }
-                capture.onError = { [weak self] message in
-                    DispatchQueue.main.async { guard let self, self.voiceGeneration == token else { return }; self.fail(message) }
-                }
+                self.wire(capture,token:token)
                 do {
                     try self.vadSession.prepare(runtime)
                     self.speech=capture; try capture.start(vad:self.vadSession); self.state.recording=true
@@ -617,32 +594,98 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
+    /// Connects a capture to this session. Shared by the microphone path and tests.
+    func wire(_ capture: SpeechCapture, token: UUID) {
+        capture.pauseDuration=state.speechPause;capture.segmentEpoch=audioEpoch;capture.setEarlyCommands(state.earlyCommands)
+        capture.onSegment = { [weak self] url, epoch, level, silence in
+            DispatchQueue.main.async { self?.receiveSegment(url,epoch:epoch,level:level,silence:silence,token:token) }
+        }
+        capture.onCandidate = { [weak self] url, candidate, epoch in
+            DispatchQueue.main.async { self?.receiveCandidate(url,candidate:candidate,epoch:epoch,token:token) }
+        }
+        capture.onLevel = { [weak self] level in
+            DispatchQueue.main.async { guard let self, self.voiceGeneration == token else { return }; self.state.level=level }
+        }
+        capture.onVoiceActivity = { [weak self] in
+            DispatchQueue.main.async { guard let self, self.voiceGeneration == token else { return }; self.state.lastSpeech=Date() }
+        }
+        capture.onError = { [weak self] message in
+            DispatchQueue.main.async { guard let self, self.voiceGeneration == token else { return }; self.fail(message) }
+        }
+    }
+    /// Learns the level of accepted phrases (saved across launches). False when "ignore quieter
+    /// voices" should drop the phrase; a running voice check measures everything.
+    func acceptLevel(_ level: Double?) -> Bool {
+        guard let level else { return true }
+        let known=levelGate.levels.count
+        if !levelGate.accepts(level),state.ignoreQuieterVoices,state.voiceCheck?.finished != false {
+            state.detail="Ignored a quieter voice. Speak as you usually do, or turn this off in Settings.";return false
+        }
+        if levelGate.levels.count != known || known==20 { UserDefaults.standard.set(levelGate.levels,forKey:"voiceLevels") }
+        return true
+    }
+    func receiveSegment(_ url: URL, epoch: UUID, level: Double?, silence: Double, token: UUID) {
+        guard voiceGeneration == token, audioEpoch == epoch, acceptLevel(level) else { try? FileManager.default.removeItem(at:url); return }
+        segmentInfo[url]=(Date().addingTimeInterval(-silence),level)
+        guard audioQueue.count < 8 else { try? FileManager.default.removeItem(at:url); fail("Speech queue is full. Please let the current instructions finish."); return }
+        audioQueue.append(url); transcribeNext()
+    }
+    /// Early commands: recognize a short phrase partway through the pause. If it is a complete
+    /// command and nothing was said since, act now instead of waiting for the rest of the pause.
+    /// Only when no earlier phrase is still waiting, so order is preserved.
+    func receiveCandidate(_ url: URL, candidate: SpeechCandidate, epoch: UUID, token: UUID) {
+        guard voiceGeneration == token, audioEpoch == epoch, !transcribing, audioQueue.isEmpty,
+              candidate.level.map({ !state.ignoreQuieterVoices || levelGate.wouldAccept($0) }) ?? true else {
+            try? FileManager.default.removeItem(at:url); return
+        }
+        let ended=Date().addingTimeInterval(-candidate.silence)
+        let settings=recognition()
+        transcribe(url,dictation:settings.dictation,prompt:settings.prompt) { [weak self] result in
+            try? FileManager.default.removeItem(at:url)
+            guard let self, self.voiceGeneration == token, self.audioEpoch == epoch, case .success(let text)=result,
+                  SpeechText.completesEarly(text,overlay:self.pointing != nil), self.speech?.claim(candidate) == true,
+                  self.acceptLevel(candidate.level) else { return }
+            self.handleTranscript(text,seconds:Date().timeIntervalSince(ended),level:candidate.level)
+        }
+    }
+    /// A voice check decodes each phrase the way real use would: commands with the command
+    /// prompt, dictation sentences with the previous sentence as context.
+    func recognition() -> (dictation: Bool, prompt: String) {
+        if let check=state.voiceCheck,!check.finished,let phrase=check.current {
+            return (phrase.dictation,SpeechText.prompt(dictation:phrase.dictation,vocabulary:state.vocabulary,context:check.previousDictation ?? ""))
+        }
+        return (state.dictating,speechPrompt())
+    }
+    func transcribe(_ url: URL, dictation: Bool, prompt: String, completion: @escaping (Result<String,Error>) -> Void) {
+        if let transcriber { transcriber(url,dictation,prompt,completion) }
+        else if let runtime { whisperSession.transcribe(runtime:runtime,url:url,dictation:dictation,prompt:prompt,completion:completion) }
+        else { completion(.failure(VoiceEditor.problem("Local runtime is unavailable."))) }
+    }
     func transcribeNext() {
-        guard !transcribing, !audioQueue.isEmpty, let runtime else { return }
+        guard !transcribing, !audioQueue.isEmpty else { return }
         let url=audioQueue.removeFirst(); transcribingURL=url
         let token=voiceGeneration; let epoch=audioEpoch
         transcribing=true
         if !state.busy { state.phase="Listening · transcribing" }
-        // A voice check decodes each phrase the way real use would: commands with the command
-        // prompt, dictation sentences with the previous sentence as context.
-        let checking=state.voiceCheck.flatMap { $0.finished ? nil : $0.current }
-        let prompt=checking.map { SpeechText.prompt(dictation:$0.dictation,vocabulary:state.vocabulary,context:state.voiceCheck?.previousDictation ?? "") } ?? speechPrompt()
-        whisperSession.transcribe(runtime:runtime,url:url,dictation:checking?.dictation ?? state.dictating,prompt:prompt) { [weak self] result in
+        let settings=recognition()
+        transcribe(url,dictation:settings.dictation,prompt:settings.prompt) { [weak self] result in
             try? FileManager.default.removeItem(at:url)
             let info=self?.segmentInfo.removeValue(forKey:url)
             guard let self,self.voiceGeneration==token,self.audioEpoch==epoch else { return }
             self.transcribing=false;self.transcribingURL=nil
             switch result {
             case .failure(let error): self.fail(error.localizedDescription);return
-            case .success(let text):
-                if self.state.voiceCheck?.finished == false {
-                    if !SpeechText.isNonSpeech(text) {
-                        self.recordVoiceCheck(SpeechText.applyVocabulary(text,self.state.vocabulary),seconds:info.map { Date().timeIntervalSince($0.ended) },level:info?.level ?? nil)
-                    }
-                } else if !SpeechText.isNonSpeech(text,dictation:self.state.dictating) { self.acceptInstruction(SpeechText.applyVocabulary(text,self.state.vocabulary)) }
+            case .success(let text): self.handleTranscript(text,seconds:info.map { Date().timeIntervalSince($0.ended) },level:info?.level ?? nil)
             }
             self.transcribeNext()
         }
+    }
+    /// One place for every transcript: scored during a voice check, otherwise run as a request.
+    /// `seconds` is measured from the end of speech.
+    func handleTranscript(_ text: String, seconds: Double?, level: Double?) {
+        if state.voiceCheck?.finished == false {
+            if !SpeechText.isNonSpeech(text) { recordVoiceCheck(SpeechText.applyVocabulary(text,state.vocabulary),seconds:seconds,level:level) }
+        } else if !SpeechText.isNonSpeech(text,dictation:state.dictating) { acceptInstruction(SpeechText.applyVocabulary(text,state.vocabulary)) }
     }
     /// Vocabulary for every phrase; while dictating, also the text before the caret plus phrases
     /// still waiting to be typed, so a sentence split by a pause keeps its casing.

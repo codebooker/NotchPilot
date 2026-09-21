@@ -63,13 +63,19 @@ These routes do not call an online model. Other app requests still use the confi
 
 While dictating, a sentence that only *resembles* a command is typed as text, as in Dragon and Voice Control. “Select the best option for your family” or “Change is hard to accept” becomes prose unless its target words already appear in the document, and “Save as much as you can” becomes prose because it names no destination. The Commands and activity window notes when this happens; say **scratch that** if you meant the command. A command whose target does appear still runs, so “Change is hard to accept” in a document that already contains “is hard” is still a replacement. Scratch that reverses it.
 
+## Faster short commands
+
+With **Respond sooner to short commands** (Settings → Everyday, on by default), NotchPilot quietly recognizes a short phrase once you have been silent for 40% of your chosen pause. If it is a complete command on its own (stop, cancel that, scratch that, new paragraph, show numbers, a grid number, press command S, delete that, read that, and similar) and you have not started speaking again, it acts right away. Anything that can take more words (“select …”, “replace …”, “click Save”, “open Safari”, which might continue “and search for …”) and all dictation still wait for the full pause. Speaking again cancels the early guess.
+
+Measured through the production speech detector and Whisper with synthesized phrases and a 1-second pause: complete commands responded 0.49–0.50 s after speech ended instead of 1.13–1.23 s, with the same recognition; “Open Safari” and a dictation sentence waited 1.1 s either way. [Results](../NotchPilot/experiments/results/early-commands.json). Early guesses run only when no earlier phrase is waiting, so order is preserved.
+
 ## Voice check
 
 Say **voice check**, or choose **Settings → Everyday → Voice check → Start**. NotchPilot shows 12 short phrases, one at a time: seven commands, three dictation sentences, and two corrections. Read each aloud and pause. While the check runs, nothing you say is acted on; each phrase is scored instead. Say **try again** after a stumble, **skip** to move on, or **stop voice check** to finish early.
 
-A command counts as understood when it would run the same command (“Click 7.” for “Click seven”); dictation must match word for word. The results show how many phrases were understood, the share of misheard words, recognition time after your pause, and your speaking level. Phrase levels also set the baseline for **Ignore quieter voices**, which is remembered across launches. Digits and number words score as the same word (“Click 7.” for “Click seven”).
+A command counts as understood when it would run the same command (“Click 7.” for “Click seven”); dictation must match word for word. The results show how many phrases were understood, the share of misheard words, how soon NotchPilot responded after you stopped speaking, and your speaking level. Phrase levels also set the baseline for **Ignore quieter voices**, which is remembered across launches. Digits and number words score as the same word (“Click 7.” for “Click seven”).
 
-First real run (one speaker, quiet room, built-in microphone, 1-second pause): 12 of 12 understood, all three dictation sentences word for word, recognition about 0.08 s after the pause, speaking level about −32 dBFS. One person in one room; it says nothing yet about accents, speech differences, or noise. Results are saved as text, without audio, in `.cache/voice-checks/` in the runtime folder, so a developer can compare real speech across changes. Run it somewhere quiet: other voices in the room are heard too.
+First real run (one speaker, quiet room, built-in microphone, 1-second pause): 12 of 12 understood, all three dictation sentences word for word, recognition about 0.08 s after the pause (about 1.1 s after speech, before early commands), speaking level about −32 dBFS. One person in one room; it says nothing yet about accents, speech differences, or noise. Results are saved as text, without audio, in `.cache/voice-checks/` in the runtime folder, so a developer can compare real speech across changes. Run it somewhere quiet: other voices in the room are heard too.
 
 ## Pointing without a mouse
 

@@ -157,7 +157,7 @@ struct VoiceCheckView: View {
 
     func details(_ summary: VoiceCheck.Summary) -> String {
         var parts=[String(format:"%.0f%% of words misheard",summary.wordErrorRate*100)]
-        if let seconds=summary.medianSeconds { parts.append(String(format:"recognition %.1f s after your %.0f-second pause",seconds,state.speechPause)) }
+        if let seconds=summary.medianSeconds { parts.append(String(format:"responds %.1f s after you stop speaking",seconds)) }
         if let level=summary.medianLevel { parts.append(String(format:"your level %.0f dBFS",level)) }
         return parts.joined(separator:" · ")
     }

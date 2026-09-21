@@ -87,6 +87,18 @@ Use disposable documents. Read results from the target app, not only from `statu
 
 Synthesizes clips with `say` and system sounds, then decodes them with and without a prompt: sentence continuity, vocabulary, spelled letters, and noise labels. Synthesized speech is a sanity check, not a microphone study.
 
+## Early-command timing
+
+```sh
+swiftc -swift-version 5 -D SESSION_TESTS -parse-as-library NotchPilot/Sources/*.swift \
+  NotchPilot/experiments/eval_early_commands.swift -o /tmp/eval-early \
+  -framework SwiftUI -framework AppKit -framework AVFoundation -framework Carbon \
+  -framework ApplicationServices -framework Security -framework ScreenCaptureKit
+/tmp/eval-early NotchPilot/build/NotchPilot.app/Contents/Resources .cache /tmp/early-commands.json
+```
+
+Plays synthesized phrases in real time through the production capture, Silero VAD, and Whisper helpers with early commands off and on, as a voice check (nothing runs). Reports how soon each phrase was handled after speech ended. It writes to a temporary runtime root, never to real voice-check results.
+
 ## Local interpreter evaluation
 
 After downloading Qwen in the app:

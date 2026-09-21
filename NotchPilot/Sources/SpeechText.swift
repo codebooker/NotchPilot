@@ -29,6 +29,21 @@ enum SpeechText {
         return [vocabularyPart, recent].filter { !$0.isEmpty }.joined(separator:" ")
     }
 
+    /// Phrases that are complete on their own, so NotchPilot can act before the full pause. Anything
+    /// that takes more words ("select …", "click Save", "open Safari and …") or dictation waits.
+    static func completesEarly(_ text: String, overlay: Bool) -> Bool {
+        guard !isNonSpeech(text) else { return false }
+        let phrase=VoiceCommandQueue.normalized(text)
+        if VoiceCommandQueue.isStop(text) || VoiceCommandQueue.isCancelTask(text) || VoiceCommandQueue.isClearQueue(text)
+            || ["go to sleep","pause listening","wake up","resume listening","new paragraph","new line"].contains(phrase) { return true }
+        switch VoiceEditCommand.parse(text) {
+        case .number?,.gridBack?,.choose?: return overlay
+        case .start?,.end?,.scratch?,.beginning?,.endOfDocument?,.help?,.key?,.press?,.selectRelative?,.deleteRelative?,.selectThat?,
+             .deleteThat?,.selectAll?,.transformThat?,.readAloud?,.showNumbers?,.hideOverlay?,.mouseGrid?,.pointerClick?: return true
+        default: return false
+        }
+    }
+
     /// Gives whole-word vocabulary matches their saved spelling ("notchpilot" → "NotchPilot").
     static func applyVocabulary(_ text: String, _ vocabulary: [String]) -> String {
         vocabulary.reduce(text) { result, word in

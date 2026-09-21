@@ -5,6 +5,15 @@ protocol SpeechFrameClassifier: AnyObject {
     func reset()
 }
 
+/// A short phrase whose speech has paused, offered for early recognition of a complete command.
+struct SpeechCandidate {
+    let id: Int
+    let speechEnd: Int
+    let samples: [Float]
+    let level: Double?
+    let silence: Double
+}
+
 // Pure state machines shared by microphone capture, the app, and replay tests.
 struct SpeechSegmenter {
     let sampleRate: Double
@@ -28,8 +37,14 @@ struct SpeechSegmenter {
     var discarding = false
     /// Level of the last completed phrase in dBFS, measured over its speech frames only.
     private(set) var lastLevel: Double?
+    /// Silence that ended the last completed phrase, so responses can be timed from the end of speech.
+    private(set) var lastSilence: Double = 0
     private var speechEnergy: Double = 0
     private var speechSamples = 0
+    private var utteranceID = 0
+    private var speechEnd = 0
+    private var offeredEnd = -1
+    private var level: Double? { speechSamples>0 ? 10 * log10(max(speechEnergy / Double(speechSamples), 1e-12)) : nil }
 
     /// `speech` comes from the resident Silero VAD, not a volume threshold.
     mutating func append(_ samples: [Float], speech: Bool) -> [Float]? {
@@ -41,20 +56,21 @@ struct SpeechSegmenter {
             return nil
         }
         if speech && !active {
-            active = true; utterance = lead; lead.removeAll(); voiced = 0; silent = 0
+            active = true; utterance = lead; lead.removeAll(); voiced = 0; silent = 0; utteranceID += 1
         }
         if active {
             utterance.append(contentsOf: samples)
             if speech {
                 voiced += seconds; silent = 0
                 speechEnergy += samples.reduce(0.0) { $0 + Double($1 * $1) }; speechSamples += samples.count
+                speechEnd = utterance.count
             } else { silent += seconds }
             if Double(utterance.count) / sampleRate > maxDuration {
                 overflow = true; reset(); discarding = true; return nil // Discard through the next pause.
             }
             if silent >= pause {
                 let result = voiced >= 0.25 ? utterance : nil
-                if result != nil { lastLevel = 10 * log10(max(speechEnergy / Double(max(1, speechSamples)), 1e-12)) }
+                if result != nil { lastLevel = level; lastSilence = silent }
                 reset(); return result
             }
         } else {
@@ -64,9 +80,22 @@ struct SpeechSegmenter {
         }
         return nil
     }
+    /// Offers a short phrase (at most `maxDuration` of speech) once per pause, after `silence` seconds.
+    mutating func candidate(after silence: Double, maxDuration: Double = 3) -> SpeechCandidate? {
+        guard active, !discarding, silent >= silence, silent < pause, voiced >= 0.25, offeredEnd != speechEnd,
+              Double(speechEnd) / sampleRate <= maxDuration else { return nil }
+        offeredEnd = speechEnd
+        return SpeechCandidate(id: utteranceID, speechEnd: speechEnd, samples: utterance, level: level, silence: silent)
+    }
+    /// Ends the phrase now if nothing was said since the candidate; the rest of the pause emits nothing.
+    mutating func claim(_ candidate: SpeechCandidate) -> Bool {
+        guard active, utteranceID == candidate.id, speechEnd == candidate.speechEnd else { return false }
+        lastLevel = candidate.level; lastSilence = silent
+        reset(); return true
+    }
     mutating func reset() {
         utterance.removeAll(); lead.removeAll(); voiced = 0; silent = 0; active = false
-        speechEnergy = 0; speechSamples = 0
+        speechEnergy = 0; speechSamples = 0; speechEnd = 0; offeredEnd = -1
         if let nextPause { pause=nextPause; self.nextPause=nil }
     }
 }
@@ -76,11 +105,13 @@ struct SpeechSegmenter {
 struct VoiceLevelGate {
     private(set) var levels: [Double] = []
     let margin = 12.0
+    func wouldAccept(_ level: Double) -> Bool {
+        guard levels.count >= 3 else { return true }
+        let sorted = levels.sorted()
+        return level >= sorted[sorted.count / 2] - margin
+    }
     mutating func accepts(_ level: Double) -> Bool {
-        if levels.count >= 3 {
-            let sorted = levels.sorted()
-            if level < sorted[sorted.count / 2] - margin { return false }
-        }
+        guard wouldAccept(level) else { return false }
         levels.append(level); levels = Array(levels.suffix(20)); return true
     }
 }

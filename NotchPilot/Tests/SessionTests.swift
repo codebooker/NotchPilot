@@ -197,6 +197,15 @@ import Foundation
         let summary=check.summary
         precondition(summary.understood==2 && summary.attempted==2 && summary.medianSeconds==0.9 && summary.medianLevel==(-20.5))
         precondition(check.previousDictation==nil || check.previousDictation=="It had flames on it.")
+        for phrase in ["Stop.","Cancel that.","Scratch that.","New paragraph.","Show numbers.","Hide numbers","Press command S.","Next field",
+                       "Delete that.","What can I say?","Go to sleep","Wake up.","Read that.","Click.","Done dictating."] {
+            precondition(SpeechText.completesEarly(phrase,overlay:false),"Complete on its own: "+phrase)
+        }
+        for phrase in ["Open Safari.","Select purple bike.","Replace purple with blue.","Spell c a t","Click Save.","A little boy rode his.",
+                       "Save as note on my desktop","Type exactly stop","5","[BLANK_AUDIO]"] {
+            precondition(!SpeechText.completesEarly(phrase,overlay:false),"Might continue: "+phrase)
+        }
+        precondition(SpeechText.completesEarly("5",overlay:true) && SpeechText.completesEarly("Go back.",overlay:true),"Numbers are complete while an overlay shows")
         precondition(QAInbox(arguments:["NotchPilot"])==nil,"QA automation is off unless explicitly launched with --qa-inbox")
         let inboxDirectory=FileManager.default.temporaryDirectory.appendingPathComponent("qa-"+UUID().uuidString)
         try FileManager.default.createDirectory(at:inboxDirectory,withIntermediateDirectories:true)
@@ -459,6 +468,31 @@ import Foundation
                      "Speech awaiting transcription is kept")
         precondition(!owner.state.busy && owner.state.dictating && owner.state.needsAttention && owner.state.detail.contains("That text is missing."))
         owner.commands.cancel();owner.audioQueue=[];try? FileManager.default.removeItem(at:spoken)
+        // Early commands end to end, with a stand-in recognizer and real audio frames through the capture.
+        let quick=AppDelegate()
+        quick.panel=FloatingPanel(contentRect:.zero,styleMask:[.borderless],backing:.buffered,defer:false)
+        var reply="Go to sleep.";var calls=0
+        quick.transcriber={ _,_,_,done in calls+=1;done(.success(reply)) }
+        let mic=SpeechCapture();mic.running=true;mic.segmenter=SpeechSegmenter(sampleRate:16000,pause:1)
+        quick.speech=mic;quick.state.recording=true;quick.wire(mic,token:quick.voiceGeneration)
+        let tone=[Float](repeating:0.1,count:1600),quiet=[Float](repeating:0,count:1600)
+        for _ in 0..<5 { mic.feed(tone,speech:true) }
+        for _ in 0..<4 { mic.feed(quiet,speech:false) }
+        RunLoop.current.run(until:Date().addingTimeInterval(0.2))
+        precondition(quick.state.voiceSleeping && calls==1,"A complete command acts 0.4 s into a 1 s pause")
+        for _ in 0..<8 { mic.feed(quiet,speech:false) }
+        RunLoop.current.run(until:Date().addingTimeInterval(0.2))
+        precondition(calls==1 && quick.audioQueue.isEmpty,"The rest of the pause does not repeat it")
+        quick.acceptInstruction("Wake up")
+        reply="Open Safari.";quick.state.busy=true // Queue without running.
+        for _ in 0..<5 { mic.feed(tone,speech:true) }
+        for _ in 0..<4 { mic.feed(quiet,speech:false) }
+        RunLoop.current.run(until:Date().addingTimeInterval(0.2))
+        precondition(calls==2 && quick.commands.pending.isEmpty,"Guessed, but it might continue, so nothing yet")
+        for _ in 0..<7 { mic.feed(quiet,speech:false) }
+        RunLoop.current.run(until:Date().addingTimeInterval(0.2))
+        precondition(calls==3 && quick.commands.pending==["Open Safari."],"The full pause submits it once")
+        quick.commands.cancel();quick.state.busy=false;quick.speech=nil
         // During a voice check, speech is scored and never run; stopping keeps what was measured.
         owner.state.voiceCheck=VoiceCheck(phrases:[VoiceCheck.Phrase("Open Safari",dictation:false),VoiceCheck.Phrase("Show numbers",dictation:false),
                                                   VoiceCheck.Phrase("Scratch that",dictation:false)])

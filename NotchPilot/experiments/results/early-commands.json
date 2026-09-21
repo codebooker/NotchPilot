@@ -1,0 +1,86 @@
+[
+  {
+    "early_commands" : false,
+    "expected" : "Scratch that",
+    "heard" : "Scratch that.",
+    "seconds_after_speech" : 1.1347191333770752,
+    "understood" : true
+  },
+  {
+    "early_commands" : false,
+    "expected" : "Show numbers",
+    "heard" : "Show numbers.",
+    "seconds_after_speech" : 1.1801899671554565,
+    "understood" : true
+  },
+  {
+    "early_commands" : false,
+    "expected" : "Press command shift S",
+    "heard" : "Press Command Shift S.",
+    "seconds_after_speech" : 1.2274930477142334,
+    "understood" : true
+  },
+  {
+    "early_commands" : false,
+    "expected" : "Delete that",
+    "heard" : "Delete that.",
+    "seconds_after_speech" : 1.2335110902786255,
+    "understood" : true
+  },
+  {
+    "early_commands" : false,
+    "expected" : "Open Safari",
+    "heard" : "Open Safari.",
+    "seconds_after_speech" : 1.0996650457382202,
+    "understood" : true
+  },
+  {
+    "early_commands" : false,
+    "expected" : "A little boy rode his purple bike.",
+    "heard" : "A little boy wrote his purple bite.",
+    "seconds_after_speech" : 1.1161580085754395,
+    "understood" : false
+  },
+  {
+    "early_commands" : true,
+    "expected" : "Scratch that",
+    "heard" : "Scratch that.",
+    "seconds_after_speech" : 0.50175595283508301,
+    "understood" : true
+  },
+  {
+    "early_commands" : true,
+    "expected" : "Show numbers",
+    "heard" : "Show numbers.",
+    "seconds_after_speech" : 0.49285507202148438,
+    "understood" : true
+  },
+  {
+    "early_commands" : true,
+    "expected" : "Press command shift S",
+    "heard" : "Press Command Shift S.",
+    "seconds_after_speech" : 0.49877703189849854,
+    "understood" : true
+  },
+  {
+    "early_commands" : true,
+    "expected" : "Delete that",
+    "heard" : "Delete that.",
+    "seconds_after_speech" : 0.4956510066986084,
+    "understood" : true
+  },
+  {
+    "early_commands" : true,
+    "expected" : "Open Safari",
+    "heard" : "Open Safari.",
+    "seconds_after_speech" : 1.0977770090103149,
+    "understood" : true
+  },
+  {
+    "early_commands" : true,
+    "expected" : "A little boy rode his purple bike.",
+    "heard" : "A little boy wrote his purple bite.",
+    "seconds_after_speech" : 1.1174260377883911,
+    "understood" : false
+  }
+]

@@ -75,8 +75,33 @@ import AVFoundation
         for level in [-20.0,-22,-18] { precondition(gate.accepts(level)) }
         precondition(!gate.accepts(-38),"A voice far quieter than yours is ignored")
         precondition(gate.accepts(-28),"Speaking a little more softly is still you")
+        precondition(!gate.wouldAccept(-38) && gate.wouldAccept(-25) && gate.levels.count==5,"Checking a level does not learn it")
         var restored=VoiceLevelGate(levels:gate.levels)
         precondition(!restored.accepts(-38),"A saved baseline works right after launch")
+        // Early commands: a short phrase can be guessed partway through the pause and claimed if it is a
+        // complete command, so the rest of the pause emits nothing. New speech invalidates a guess.
+        var early=SpeechSegmenter(sampleRate:16000,pause:1)
+        for _ in 0..<5 { _=early.append(voice,speech:true) }
+        for _ in 0..<3 { _=early.append(silence,speech:false) }
+        precondition(early.candidate(after:0.4)==nil,"Too early to guess")
+        _=early.append(silence,speech:false)
+        let guess=early.candidate(after:0.4)!
+        precondition(abs(guess.silence-0.4)<0.01 && guess.level != nil && !guess.samples.isEmpty)
+        precondition(early.candidate(after:0.4)==nil,"One guess per pause")
+        precondition(early.claim(guess) && !early.active,"A confirmed command ends the phrase now")
+        for _ in 0..<10 { precondition(early.append(silence,speech:false)==nil,"The rest of the pause emits nothing") }
+        for _ in 0..<5 { _=early.append(voice,speech:true) }
+        for _ in 0..<4 { _=early.append(silence,speech:false) }
+        let stale=early.candidate(after:0.4)!
+        _=early.append(voice,speech:true)
+        precondition(!early.claim(stale),"Speaking again keeps listening")
+        var emitted=0
+        for _ in 0..<12 { if early.append(silence,speech:false) != nil { emitted+=1 } }
+        precondition(emitted==1 && abs(early.lastSilence-1.0)<0.11,"Unclaimed phrases still end after the full pause, reporting it")
+        var lengthy=SpeechSegmenter(sampleRate:16000,pause:1)
+        for _ in 0..<40 { _=lengthy.append(voice,speech:true) }
+        for _ in 0..<5 { _=lengthy.append(silence,speech:false) }
+        precondition(lengthy.candidate(after:0.4)==nil,"Long phrases are never guessed")
         var dictation=VoiceCommandQueue()
         precondition(dictation.enqueue("Replace missing with text")); precondition(dictation.enqueue("Next sentence."))
         _=dictation.next(); dictation.skipActive()
