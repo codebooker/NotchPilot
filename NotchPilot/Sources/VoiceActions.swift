@@ -2,7 +2,13 @@ import AppKit
 
 extension AppDelegate {
     @discardableResult func handleLocalVoiceCommand(_ goal:String) -> Bool {
-        let command=VoiceEditCommand.parse(goal)
+        var command=VoiceEditCommand.parse(goal)
+        // A bare number or "go back" means something only while numbers or the grid are showing.
+        switch (command,pointing) {
+        case (.number?,nil),(.gridBack?,nil),(.gridBack?,.numbers?): command=nil
+        default: break
+        }
+        if command?.isPointing != true { hidePointing() }
         guard command != nil || state.dictating else { return false }
         rememberTarget()
         let token=UUID();generation=token;state.busy=true;state.cost=0
@@ -36,10 +42,14 @@ extension AppDelegate {
                 state.dictating=false;speech?.setDictation(false);voiceEditor.target=nil
                 finishVoiceAction("Opened "+(opened.localizedName ?? "the app")+". Ready for your next request.",token:token);return
             }
+            var keptAsText=false
+            if let pointingCommand=command,pointingCommand.isPointing {
+                if try await handlePointing(pointingCommand,token:token) { return }
+                command=nil;keptAsText=true // A dictated "click here…" that matched no control.
+            }
             if case .addWord(let word?)=command { finishVocabulary(word,add:true,token:token);return }
             if case .removeWord(let word)=command { finishVocabulary(word,add:false,token:token);return }
             let currentTarget=targetApp.flatMap { app in targetWindowID.map { (pid:app.processIdentifier,window:$0) } }
-            var keptAsText=false
             if state.dictating,let parsed=command,let bound=voiceEditor.target,
                parsed.isProse(in:voiceEditor.documentText(pid:bound.pid,window:bound.window)) { command=nil;keptAsText=true }
             let destination: (pid:pid_t,window:Int)?

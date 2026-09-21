@@ -39,6 +39,10 @@ Pause between phrases using your chosen one-, two-, or three-second delay. You d
 | **Insert before [words]** / **Insert after [words]** | Put the cursor next to a unique phrase. |
 | **Spell c a t** / **Spell cap j o h n** / **Spell all caps n a s a** | Type letters, NATO words (“Charlie Alpha Tango”), digits, and dash, dot, at, underscore, slash. Whisper often hears letters as words (“see a tea”); both work. |
 | **Add that to vocabulary** / **Add the word Siobhan** / **Remove the word Siobhan** | Edit Words to recognize. “That” works after spelling a word. |
+| **Show numbers** | Number the buttons, links, fields, and other controls in the front window. Then say a number (“seven”), **click 7**, **double click 7**, or **right click 7**. **Hide numbers** closes them. |
+| **Click Save** / **Double click Read Me** / **Right click Trash** | Click a control by its name. Several matches get numbers; say the one you want. Menu commands work too when no window control matches (“click Save As”). |
+| **Mouse grid** | Dragon's grid: nine numbered cells over the screen. Each number zooms into that cell; **go back** zooms out; **click**, **double click**, or **right click** acts at the center; **hide grid** closes it. |
+| **Click** / **Double click** / **Right click** | Click where the pointer is (or at the grid's center). |
 | **Press command shift S** / **Hit escape** / **Press F5** | Press any key with command, shift, option, or control, including arrows, Home/End, and F1–F12. |
 | **Go to beginning** / **Go to end** | Move the caret to the document boundary. |
 | **Type exactly …** / **Literal text …** | Insert the remaining transcript literally, including command-like words. |
@@ -57,6 +61,14 @@ Pause between phrases using your chosen one-, two-, or three-second delay. You d
 These routes do not call an online model. Other app requests still use the configured interpreter/controller. Literal mode preserves the *transcript*; it cannot undo a speech recognition mistake. Command phrases are reserved during dictation: say “literal text new paragraph” if those words belong in your document.
 
 While dictating, a sentence that only *resembles* a command is typed as text, as in Dragon and Voice Control. “Select the best option for your family” or “Change is hard to accept” becomes prose unless its target words already appear in the document, and “Save as much as you can” becomes prose because it names no destination. The Commands and activity window notes when this happens; say **scratch that** if you meant the command. A command whose target does appear still runs, so “Change is hard to accept” in a document that already contains “is hard” is still a replacement. Scratch that reverses it.
+
+## Pointing without a mouse
+
+**Show numbers** reads the front window through Accessibility and labels up to 200 visible controls in reading order. Nothing is clicked until you say a number. Before a click, NotchPilot checks that the same app is still in front and the control has not moved; otherwise it asks you to show numbers again. The NotchPilot cursor travels to the target so you can see where the click goes. Buttons are pressed through Accessibility where they support it, which does not move your mouse pointer. Other controls, double clicks, and the grid use a real mouse click at the target.
+
+Chrome and other Chromium browsers build their page accessibility only when an assistive app asks; NotchPilot asks, and the first request on a page can come back sparse. Canvases, games, and custom-drawn controls expose nothing to number. Use the mouse grid for those. A bare number (“five”) or “go back” means a number only while numbers or the grid are showing; otherwise it is ordinary text or a request. While dictating, “click here to continue” is typed when no control matches.
+
+Verified live in Calculator: numbering found its 24 buttons; “nine” (the 7 key), “click multiply”, “15” (the 6 key), and “click equals” showed 7×6 = 42; four grid zooms (with a “go back”) and “click” hit All Clear.
 
 ## Corrections preserve the document
 

@@ -124,6 +124,33 @@ import Foundation
         precondition(!owner.state.addVocabulary("two, words") && !owner.state.addVocabulary(""),"One word or name at a time")
         precondition(owner.state.removeVocabulary("SIOBHAN") && owner.state.vocabulary==["NotchPilot"] && !owner.state.removeVocabulary("absent"))
         owner.state.vocabularyText=savedVocabulary
+        // Numbers, click by name, and the mouse grid.
+        precondition(VoiceEditCommand.parse("Show numbers.") == .showNumbers)
+        precondition(VoiceEditCommand.parse("Hide numbers") == .hideOverlay && VoiceEditCommand.parse("Close grid.") == .hideOverlay)
+        precondition(VoiceEditCommand.parse("Click 5.") == .choose(5,.click))
+        precondition(VoiceEditCommand.parse("Double click 3") == .choose(3,.doubleClick))
+        precondition(VoiceEditCommand.parse("Right-click twelve.") == .choose(12,.rightClick))
+        precondition(VoiceEditCommand.parse("5") == .number(5) && VoiceEditCommand.parse("Five.") == .number(5))
+        precondition(VoiceEditCommand.parse("Number 14") == .number(14) && VoiceEditCommand.parse("For.") == .number(4))
+        precondition(VoiceEditCommand.parse("Click Save.") == .clickNamed("save",.click))
+        precondition(VoiceEditCommand.parse("Double-click Read Me") == .clickNamed("read me",.doubleClick))
+        precondition(VoiceEditCommand.parse("Mouse grid") == .mouseGrid && VoiceEditCommand.parse("Show grid.") == .mouseGrid)
+        precondition(VoiceEditCommand.parse("Click.") == .pointerClick(.click) && VoiceEditCommand.parse("Right click") == .pointerClick(.rightClick))
+        precondition(VoiceEditCommand.parse("Go back.") == .gridBack)
+        let dialog=["Save","Save As…","Cancel","Don’t Save","Search"]
+        precondition(PointTargets.matches("save",labels:dialog)==[0],"An exact name wins")
+        precondition(PointTargets.matches("save as",labels:dialog)==[1])
+        precondition(PointTargets.matches("don't save",labels:dialog)==[3],"Apostrophes do not matter")
+        precondition(PointTargets.matches("sea",labels:dialog)==[4],"A unique prefix")
+        precondition(PointTargets.matches("sav",labels:dialog)==[0,1],"Ambiguous prefixes return every match")
+        precondition(PointTargets.matches("delete",labels:dialog).isEmpty)
+        let ordered=PointTargets.readingOrder([CGRect(x:300,y:12,width:20,height:20),CGRect(x:10,y:200,width:20,height:20),CGRect(x:10,y:10,width:20,height:20)])
+        precondition(ordered==[2,0,1],"Numbers read left to right, then top to bottom")
+        var grid=MouseGrid(CGRect(x:0,y:0,width:900,height:600))
+        precondition(grid.zoom(5) && grid.rect==CGRect(x:300,y:200,width:300,height:200) && grid.center==CGPoint(x:450,y:300))
+        precondition(grid.zoom(1) && grid.rect==CGRect(x:300,y:200,width:100,height:200/3.0),"Cell 1 is the top left")
+        precondition(grid.back() && grid.rect==CGRect(x:300,y:200,width:300,height:200) && !grid.zoom(0) && !grid.zoom(10))
+        precondition(grid.back() && !grid.back(),"Back stops at the whole screen")
         precondition(QAInbox(arguments:["NotchPilot"])==nil,"QA automation is off unless explicitly launched with --qa-inbox")
         let inboxDirectory=FileManager.default.temporaryDirectory.appendingPathComponent("qa-"+UUID().uuidString)
         try FileManager.default.createDirectory(at:inboxDirectory,withIntermediateDirectories:true)
@@ -267,6 +294,25 @@ import Foundation
             }
             view.placeBadge(at:NSPoint(x:500,y:10),on:screen)
             precondition(view.badgeOrigin.y+26<CursorView.hotspot.y,"Bottom-edge badge sits above the hotspot")
+        }
+        // The overlay draws badges and outlines only; everything else stays transparent and click-through.
+        let overlayView=PointingView(frame:NSRect(x:0,y:0,width:400,height:300))
+        overlayView.screenQuartz=CGRect(x:0,y:0,width:400,height:300)
+        let sample=PointTarget(element:AXUIElementCreateSystemWide(),pid:0,role:"AXButton",label:"OK",frame:CGRect(x:120,y:100,width:80,height:28),actions:[])
+        for (name,value) in [("numbers",Pointing.numbers([sample,PointTarget(element:sample.element,pid:0,role:"AXLink",label:"Help",frame:CGRect(x:220,y:100,width:60,height:20),actions:[])])),
+                             ("grid",Pointing.grid(MouseGrid(CGRect(x:0,y:0,width:400,height:300))))] {
+            overlayView.pointing=value
+            guard let bitmap=overlayView.bitmapImageRepForCachingDisplay(in:overlayView.bounds) else { preconditionFailure("The overlay must render") }
+            overlayView.cacheDisplay(in:overlayView.bounds,to:bitmap)
+            if let index=CommandLine.arguments.firstIndex(of:"--overlay-preview"),CommandLine.arguments.count>index+1 {
+                try bitmap.representation(using:.png,properties:[:])?.write(to:URL(fileURLWithPath:CommandLine.arguments[index+1]+"-"+name+".png"))
+            }
+            let scale=CGFloat(bitmap.pixelsWide)/overlayView.bounds.width
+            func alpha(_ x:CGFloat,_ y:CGFloat) -> CGFloat { bitmap.colorAt(x:Int(x*scale),y:Int(y*scale))?.alphaComponent ?? 0 }
+            if name=="numbers" {
+                precondition(alpha(124,96)>0.5,"A numbered badge sits at the control's top-left corner")
+                precondition(alpha(350,250)==0,"Space without controls is transparent")
+            } else { precondition(alpha(200,150)>0.5,"Cell 5 is labeled at the grid's center") }
         }
         let motion=CursorMotion(window:owner.cursor)
         var arrived=false

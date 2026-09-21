@@ -252,6 +252,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let preferencesDraft = PreferencesDraft()
     var qaInbox: QAInbox?
     var levelGate = VoiceLevelGate()
+    var pointing: Pointing?
+    let pointingOverlay = PointingOverlay()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if let index=CommandLine.arguments.firstIndex(of:"--probe-cua"),CommandLine.arguments.count>index+1 {
@@ -640,7 +642,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         discardPendingAudio()
     }
     func cancelCurrentTask() {
-        autoCloseGeneration=UUID();generation=UUID();planner.cancel();clearReview()
+        autoCloseGeneration=UUID();generation=UUID();planner.cancel();clearReview();hidePointing()
         try? input?.fileHandleForWriting.close();task?.terminate();task=nil;input=nil;workerSucceeded=false
         commands.finish(success:false);clearWaitingRequests()
         dialogue=[];originalGoal="";resolvedGoal="";flightPlan=nil
@@ -880,6 +882,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return ["bound":voiceEditor.target.map { [Int($0.pid),$0.window] } ?? [],
          "front":front.map { [Int($0.processIdentifier),HostKeyboard.frontWindow(pid:$0.processIdentifier,bundle:$0.bundleIdentifier) ?? -1] } ?? [],
          "phase":state.phase,"detail":state.detail,"busy":state.busy,"dictating":state.dictating,"sleeping":state.voiceSleeping,"recording":state.recording,"command":state.command,"interpreted":state.interpreted,
+         "overlay":{ () -> String in
+             switch pointing {
+             case .numbers(let targets)?: return "numbers:"+targets.enumerated().map { "\($0.offset+1)=\($0.element.role):\($0.element.label)@\(Int($0.element.frame.midX)),\(Int($0.element.frame.midY))" }.joined(separator:"|")
+             case .grid(let grid)?: return "grid:\(Int(grid.rect.minX)),\(Int(grid.rect.minY)),\(Int(grid.rect.width))x\(Int(grid.rect.height))"
+             case nil: return ""
+             }
+         }(),
          "pending":commands.pending.count,"completedAt":state.completedAt.timeIntervalSince1970]
     }
     func ack(_ token: UUID) {
@@ -899,7 +908,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     func stop(close: Bool) {
         autoCloseGeneration=UUID()
-        generation=UUID(); stopAudio(); planner.cancel();clearReview()
+        generation=UUID(); stopAudio(); planner.cancel();clearReview();hidePointing()
         state.dictating=false;state.voiceSleeping=false;voiceEditor.target=nil;voiceEditor.history.removeAll()
         try? input?.fileHandleForWriting.close();task?.terminate(); task=nil; input=nil; commands.cancel(); dialogue=[]; originalGoal=""; resolvedGoal=""
         state.question=""; state.answer=""; state.interpreted=""; state.requestDraft=""
@@ -907,7 +916,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         hideCursor(); if close { panel.orderOut(nil);activityWindow?.orderOut(nil);preferences?.orderOut(nil);setEscapeShortcut(active:false) } else { showPanel(key:false) }
     }
     func autoCloseReady(at now: Date = Date()) -> Bool {
-        state.closeWhenDone && !state.dictating && !state.voiceSleeping && !state.busy && !state.needsAttention && state.question.isEmpty && commands.active==nil && commands.pending.isEmpty &&
+        state.closeWhenDone && pointing==nil && !state.dictating && !state.voiceSleeping && !state.busy && !state.needsAttention && state.question.isEmpty && commands.active==nil && commands.pending.isEmpty &&
         activityWindow?.isVisible != true && preferences?.isVisible != true &&
         !transcribing && audioQueue.isEmpty && speech?.hasPendingSpeech != true && now.timeIntervalSince(state.lastSpeech)>1.4
     }

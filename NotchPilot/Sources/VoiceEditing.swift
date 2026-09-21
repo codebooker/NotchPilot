@@ -7,6 +7,13 @@ enum VoiceEditCommand: Equatable {
     case press(KeyChord), selectRelative(TextUnit,TextDirection,Int), deleteRelative(TextUnit,TextDirection,Int)
     case selectThat, deleteThat, selectAll, transformThat(TextCase), insertAt(before:Bool,String), spell(String)
     case addWord(String?), removeWord(String)
+    case showNumbers, hideOverlay, mouseGrid, gridBack, number(Int), choose(Int,ClickKind), clickNamed(String,ClickKind), pointerClick(ClickKind)
+    var isPointing: Bool {
+        switch self {
+        case .showNumbers,.hideOverlay,.mouseGrid,.gridBack,.number,.choose,.clickNamed,.pointerClick: return true
+        default: return false
+        }
+    }
     static func parse(_ text: String) -> VoiceEditCommand? {
         let clean=text.trimmingCharacters(in:.whitespacesAndNewlines)
         let normalized=VoiceCommandQueue.normalized(clean)
@@ -34,6 +41,10 @@ enum VoiceEditCommand: Equatable {
         case "capitalize that","cap that","caps that": return .transformThat(.capitalized)
         case "all caps that","uppercase that": return .transformThat(.uppercase)
         case "no caps that","lowercase that": return .transformThat(.lowercase)
+        case "show numbers","show the numbers","number the controls","show labels": return .showNumbers
+        case "hide numbers","hide the numbers","close numbers","hide grid","hide the grid","close grid","close the grid": return .hideOverlay
+        case "mouse grid","show grid","show the grid","show mouse grid": return .mouseGrid
+        case "go back","back","grid back": return .gridBack
         case "add that to vocabulary","add that to my vocabulary","add that to the vocabulary","add that word",
              "add that to my words","add that to dictionary","add that to my dictionary": return .addWord(nil)
         default: break
@@ -45,6 +56,11 @@ enum VoiceEditCommand: Equatable {
             return nil
         }
         if let relative=Self.relative(normalized) { return relative }
+        if let click=Self.click(words) { return click }
+        let spoken=["number","choose","pick"].contains(words.first ?? "") ? Array(words.dropFirst()) : words
+        if let number=Self.number(spoken,homophones:spoken.count==words.count) {
+            return spoken.count==words.count || words.first=="number" ? .number(number) : .choose(number,.click)
+        }
         let apps=["textedit":"com.apple.TextEdit","safari":"com.apple.Safari","finder":"com.apple.finder",
                   "calculator":"com.apple.calculator","google chrome":"com.google.Chrome","notes":"com.apple.Notes","mail":"com.apple.mail"]
         for (name,bundle) in apps where ["open "+name,"switch to "+name,"launch "+name].contains(normalized) { return .openApp(bundle) }
@@ -69,6 +85,30 @@ enum VoiceEditCommand: Equatable {
         // Paths are literal. Do not remove a final dot from an actual filename.
         if let p=parts("^save(?: (?:it|this|the document))? as (.+)$") { return .saveAs(p[0].trimmingCharacters(in:CharacterSet(charactersIn:"\"“”"))) }
         if let p=parts("^(?:type exactly|literal text) (.+)$") { return .insert(p[0]) }
+        return nil
+    }
+    /// "click", "click 5", "double click 3", "right click save", "click Save As".
+    static func click(_ words:[String]) -> VoiceEditCommand? {
+        var kind=ClickKind.click;var rest=words[...]
+        if words.starts(with:["double","click"]) { kind = .doubleClick;rest=rest.dropFirst(2) }
+        else if words.starts(with:["right","click"]) { kind = .rightClick;rest=rest.dropFirst(2) }
+        else if words.first=="click" { rest=rest.dropFirst() } else { return nil }
+        if rest.isEmpty { return .pointerClick(kind) }
+        if let number=number(Array(rest),homophones:false) { return .choose(number,kind) }
+        return .clickNamed(rest.joined(separator:" "),kind)
+    }
+    /// 1–999 as digits, or number words up to ninety-nine. Bare utterances also accept the words
+    /// Whisper uses for lone digits ("to", "for").
+    static func number(_ words:[String],homophones:Bool) -> Int? {
+        let units=["one":1,"two":2,"three":3,"four":4,"five":5,"six":6,"seven":7,"eight":8,"nine":9,"ten":10,"eleven":11,"twelve":12,
+                   "thirteen":13,"fourteen":14,"fifteen":15,"sixteen":16,"seventeen":17,"eighteen":18,"nineteen":19]
+        let tens=["twenty":20,"thirty":30,"forty":40,"fifty":50,"sixty":60,"seventy":70,"eighty":80,"ninety":90]
+        let sounds=["to":2,"too":2,"for":4,"won":1,"ate":8]
+        if words.count==1 {
+            if let digits=Int(words[0]) { return (1...999).contains(digits) ? digits : nil }
+            return units[words[0]] ?? tens[words[0]] ?? (homophones ? sounds[words[0]] : nil)
+        }
+        if words.count==2,let ten=tens[words[0]],let unit=units[words[1]],unit<10 { return ten+unit }
         return nil
     }
     /// "select the last three words", "delete next sentence", "select previous paragraph".
