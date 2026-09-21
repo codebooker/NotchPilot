@@ -55,7 +55,9 @@ enum VoiceEditCommand: Equatable {
         let words=normalized.split(separator:" ").map(String.init)
         if let first=words.first,["press","hit"].contains(first),words.count>1,let chord=KeyChord.parse(Array(words.dropFirst())) { return .press(chord) }
         if words.first=="spell",words.count>1 {
-            if let spelled=Spelling.parse(Array(words.dropFirst())) { return .spell(spelled) }
+            // Keep the original case: Whisper writes quickly spoken letters as one capitalized word.
+            let original=clean.components(separatedBy:CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }
+            if let spelled=Spelling.parse(Array(original.dropFirst())) { return .spell(spelled) }
             return nil
         }
         if let relative=Self.relative(normalized) { return relative }

@@ -37,7 +37,7 @@ Pause between phrases using your chosen one-, two-, or three-second delay. You d
 | **Capitalize that** / **All caps that** / **No caps that** | Capitalize each word, uppercase, or lowercase “that”. |
 | **Select all** | Select the whole document. |
 | **Insert before [words]** / **Insert after [words]** | Put the cursor next to a unique phrase. |
-| **Spell c a t** / **Spell cap j o h n** / **Spell all caps n a s a** | Type letters, NATO words (“Charlie Alpha Tango”), digits, and dash, dot, at, underscore, slash. Whisper often hears letters as words (“see a tea”); both work. |
+| **Spell c a t** / **Spell cap j o h n** / **Spell all caps n a s a** | Type letters, NATO words (“Charlie Alpha Tango”), digits, and dash, dot, at, underscore, slash. Whisper often hears letters as words (“see a tea”) or runs them together into a capitalized word (“Spell CAT.”); all of these work. |
 | **Add that to vocabulary** / **Add the word Siobhan** / **Remove the word Siobhan** | Edit Words to recognize. “That” works after spelling a word. |
 | **Show numbers** | Number the buttons, links, fields, and other controls in the front window. Then say a number (“seven”), **click 7**, **double click 7**, or **right click 7**. **Hide numbers** closes them. |
 | **Click Save** / **Double click Read Me** / **Right click Trash** | Click a control by its name. Several matches get numbers; say the one you want. Menu commands work too when no window control matches (“click Save As”). |
@@ -75,7 +75,7 @@ Say **voice check**, or choose **Settings → Everyday → Voice check → Start
 
 A command counts as understood when it would run the same command (“Click 7.” for “Click seven”); dictation must match word for word. The results show how many phrases were understood, the share of misheard words, how soon NotchPilot responded after you stopped speaking, and your speaking level. Phrase levels also set the baseline for **Ignore quieter voices**, which is remembered across launches. Digits and number words score as the same word (“Click 7.” for “Click seven”).
 
-First real run (one speaker, quiet room, built-in microphone, 1-second pause): 12 of 12 understood, all three dictation sentences word for word, recognition about 0.08 s after the pause (about 1.1 s after speech, before early commands), speaking level about −32 dBFS. One person in one room; it says nothing yet about accents, speech differences, or noise. Results are saved as text, without audio, in `.cache/voice-checks/` in the runtime folder, so a developer can compare real speech across changes. Run it somewhere quiet: other voices in the room are heard too.
+First real run (one speaker, quiet room, built-in microphone, 1-second pause): 12 of 12 understood, all three dictation sentences word for word, recognition about 0.08 s after the pause (about 1.1 s after speech, before early commands), speaking level about −32 dBFS. One person in one room; it says nothing yet about accents, speech differences, or noise. A later run with early commands responded 0.49–0.50 s after speech for complete commands (1.09–1.12 s for the rest) and found one miss: “spell c a t” came back as “Spell CAT.”, which is now treated as letters. Results are saved as text, without audio, in `.cache/voice-checks/` in the runtime folder, so a developer can compare real speech across changes. Run it somewhere quiet: other voices in the room are heard too.
 
 ## Pointing without a mouse
 

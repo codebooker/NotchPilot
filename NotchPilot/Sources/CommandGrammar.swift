@@ -92,9 +92,13 @@ enum Spelling {
         if let index=numberWords.firstIndex(of:word) { return String(index) }
         return letterWords[word]
     }
-    /// "c a t" → "cat"; "cap j o h n" → "John"; "all caps n a s a" → "NASA"; "j at example dot com".
-    /// Whole words are allowed only alongside a symbol word (addresses); otherwise nil.
-    static func parse(_ words: [String]) -> String? {
+    /// "c a t" → "cat"; "CAT" → "cat"; "cap j o h n" → "John"; "all caps n a s a" → "NASA";
+    /// "j at example dot com". Other whole words are allowed only alongside a symbol word
+    /// (addresses); otherwise nil. An all-caps word is letters Whisper ran together.
+    static func parse(_ tokens: [String]) -> String? {
+        let words = tokens.flatMap { token -> [String] in
+            token.count > 1 && token.allSatisfy({ $0.isLetter && $0.isUppercase }) ? token.map { String($0).lowercased() } : [token.lowercased()]
+        }
         var result = ""; var capitalNext = false; var allCaps = false; var literal = false; var sawSymbol = false
         var index = 0
         while index < words.count {
