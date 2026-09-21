@@ -4,6 +4,12 @@ import SwiftUI
 enum PilotCopy {
     static func issue(_ detail:String) -> String {
         let text=detail.lowercased()
+        if text.contains("file already exists") { return "Choose a different filename." }
+        if text.contains("appears more than once") { return "Say a longer, unique phrase." }
+        if text.contains("nothing was undone") { return "Text changed. Say select [words]." }
+        if text.contains("destination folder does not exist") { return "Choose an existing folder." }
+        if text.contains("speech recognition took too long") { return "Speech stalled. Please try again." }
+        if text.contains("choose the text area") || text.contains("open a document first") { return "Open a document to dictate." }
         if text.contains("permission") || text.contains("accessibility") || text.contains("screen capture") { return "Check access in Settings" }
         if text.contains("too long") || text.contains("timeout") { return "Slow connection. Please try again." }
         if text.contains("focused app changed") || text.contains("window moved") { return "The window changed. Try again." }
@@ -99,7 +105,7 @@ struct PilotView: View {
                             if state.reviewReady { Image(systemName:"pause.fill").foregroundStyle(PilotStyle.mint) }
                             else if state.busy { ProgressView().controlSize(.mini).tint(PilotStyle.mint) }
                             else { Image(systemName:context.date.timeIntervalSince(state.completedAt)<2 ? "checkmark" : "mic.fill").foregroundStyle(PilotStyle.mint).font(.system(size:11)) }
-                            Text(context.date.timeIntervalSince(state.completedAt)<2 && !state.busy ? "All done" : state.shortStatus)
+                            Text(context.date.timeIntervalSince(state.completedAt)<2 && !state.busy && !state.dictating && !state.voiceSleeping ? "All done" : state.shortStatus)
                                 .font(.system(size:12,weight:.medium)).lineLimit(1)
                             Spacer(minLength:0)
                             if state.queued>0 {
@@ -249,7 +255,7 @@ struct ActivityView: View {
                     }.font(.system(size:12)).frame(maxWidth:.infinity,alignment:.leading)
                 }.frame(maxHeight:130)
             }.font(.system(size:12)).foregroundStyle(PilotStyle.secondary)
-            Text("\(state.shortcutLabel) opens or closes voice. \(state.pauseHint) Say “cancel that” to cancel a task and keep listening.")
+            Text("\(state.shortcutLabel) opens or closes voice. \(state.pauseHint) Say “start dictating” to write continuously, “command mode” for app tasks, or “what can I say” for help.")
                 .font(.system(size:12)).foregroundStyle(PilotStyle.secondary)
         }.padding(26).frame(width:460).background(PilotStyle.paper).foregroundStyle(PilotStyle.ink).tint(PilotStyle.teal)
     }

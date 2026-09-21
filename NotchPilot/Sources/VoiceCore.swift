@@ -17,6 +17,7 @@ struct SpeechSegmenter {
     var utterance: [Float] = []
     var voiced: Double = 0
     var silent: Double = 0
+    var maxDuration: Double = 30
     var noiseDB: Double = -65
     var active = false
     var overflow = false
@@ -40,7 +41,7 @@ struct SpeechSegmenter {
         if active {
             utterance.append(contentsOf: samples)
             if speech { voiced += seconds; silent = 0 } else { silent += seconds }
-            if Double(utterance.count) / sampleRate > 30 {
+            if Double(utterance.count) / sampleRate > maxDuration {
                 overflow = true; reset(); discarding = true; return nil // Discard through the next pause.
             }
             if silent >= pause {

@@ -9,6 +9,7 @@ flowchart TD
     Typed[Optional typed request] --> Controls[Local session commands]
     Whisper --> Controls
     Controls --> Queue[Ordered request queue]
+    Queue --> Editing[Local dictation / corrections / Save As / common app commands]
     Queue --> Qwen[Optional local Qwen interpreter]
     Qwen --> Question[Ask for clarification when needed]
     Question --> Qwen
@@ -24,7 +25,7 @@ flowchart TD
 
 ## Voice and context
 
-`SpeechCapture.swift` keeps a single AVAudioEngine input tap open. `VoiceCore.swift` segments phrases at the selected one-, two-, or three-second pause. Whisper receives mono 16 kHz WAV segments. Silence does not end a session; a phrase over 30 seconds is discarded through the next pause rather than executing an incomplete request.
+`SpeechCapture.swift` keeps a single AVAudioEngine input tap open. `VoiceCore.swift` segments phrases at the selected one-, two-, or three-second pause. A signed resident `whisper-session` helper receives mono 16 kHz WAV segments over stdin/stdout and loads base.en once. Decoding context is reset for each phrase; model weights remain warm. `WhisperSession.swift` tracks request IDs, drops cancelled callbacks, and resets the helper after a 90-second timeout. Silence does not end a session. Dictation mode permits an unbroken phrase up to 120 seconds, versus 30 seconds in command mode; longer phrases are discarded through the next pause rather than executing an incomplete request.
 
 Exact session commands (stop, cancel that, clear the queue, resume task while reviewing) are handled locally before model interpretation. The queue accepts up to eight waiting requests and retains the last six successful resolved goals as context. Failures clear dependent follow-ups and stale audio. Task cancellation preserves earlier successful context; full session stop clears it.
 
@@ -39,6 +40,10 @@ A small set of exact requests can use local routes. Literal URLs in a named brow
 The Cua controller can batch up to seven follow-up clicks on already-observed controls. Each is rebound to a fresh token after a new observation; unexpected surface changes discard the remaining sequence. Explicit “then” stages advance after an observed completion. Each stage has a 24-step allowance, within a 72-step task cap, 180 seconds of active work, and the existing API budget. Loop detection resets at verified stage boundaries so an explicitly repeated instruction is allowed. Empty accessibility observations get two short read-only retries, then stop with a clear message instead of paying for repeated model decisions. Host checks cover supported keys, foreground process/window identity, editable-field focus, and cancellation generation. These checks limit stale input; they cannot make arbitrary model judgments infallible.
 
 Literal “write…” / “type…” requests preserve their text without Qwen rewriting. The host carries the current app and exact window into follow-up requests. When Cua observes one document text area, literal dictation inserts through the signed host at the actual accessibility selection, verifies the resulting whole value, and preserves the rest of the document. Ordinary insertion adds a word boundary where needed; “type exactly” preserves exact spacing. This path makes no online model calls. Composition requests and ambiguous interfaces retain the controller path.
+
+`VoiceActions.swift` routes explicit dictation/correction, common app, key-navigation, and Save As commands before Qwen. `VoiceEditing.swift` binds continuous dictation to a document window, uses unique phrase matching, and stores up to 20 verified edits for guarded scratch/undo. Native Save As handles standard dialog identifiers, protects existing destinations, and requires a saved file plus the matching document URL. Sleep mode ignores ordinary speech while retaining the microphone for wake-up. These are bounded local paths; unsupported editors still need the controller or user. See [Hands-free use](hands-free.md).
+
+S1 Forms is an isolated experiment, not part of the production routing graph. Its model results and the unresolved delivery-adapter work are recorded in [the evaluation](cua-s1-evaluation.md).
 
 ## Review, stop, and cursor
 

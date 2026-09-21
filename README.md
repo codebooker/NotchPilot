@@ -37,8 +37,9 @@ The idea is simple: make everyday computer tasks easier to ask for—whether you
 
 | | What you get |
 |---|---|
-| **Talk naturally** | Local Whisper `base.en` transcribes speech. Optional local Qwen3 1.7B helps interpret casual phrasing and asks for missing details. |
+| **Talk naturally** | Persistent local Whisper `base.en` transcribes speech without reloading for each phrase. Optional local Qwen3 1.7B helps interpret casual phrasing and asks for missing details. |
 | **Keep the conversation going** | Say another request while it works. Follow-ups queue in order, with recent successful tasks as context. |
+| **Dictate and correct** | Say “start dictating,” keep talking, then “replace purple with blue” or “scratch that.” Native Save As recovery helps finish the document. |
 | **See what happens** | The working app comes forward. A rounded lavender cursor shows the target, action feedback, and a compact NotchPilot badge. |
 | **Take your time** | Choose a one-, two-, or three-second speaking pause. Changing it does not cut off the phrase in progress. |
 | **Stay in control** | Cancel a task without closing the mic. Review and clear queued requests. Pause Cua while you type, then resume. |
@@ -56,6 +57,8 @@ The idea is simple: make everyday computer tasks easier to ask for—whether you
 ```
 
 With a text document open, try **“Write The sun was shining.”** Another “write…” request adds text at the caret while preserving existing content. Use **“type exactly…”** when spacing must stay literal. Plain dictation uses a local insertion path when one document text area is available; composing new prose is a separate option in Advanced.
+
+For continuous writing, say **“Start dictating.”** Then speak your sentences, **“new paragraph,” “replace purple with blue,”** and **“scratch that.”** Say **“Save as My note on my desktop”** to save a new copy, and **“Done dictating”** to return to commands. [Explore the hands-free guide →](docs/hands-free.md)
 
 These describe exercised task types, not a guarantee that every app or phrasing will work. Start with one clear request, then build up to a short sequence.
 
@@ -137,12 +140,15 @@ Open the gear → **Everyday**.
 | **Close when the task is finished** | Close after successful work and a short grace period, or keep listening for the next request. |
 | **Strip position** | Drag it out of the way, or move it back below the notch. |
 
-Questions, errors, pending speech, and an open conversation/settings window prevent automatic closing. The microphone stays active while ordinary commands run.
+Questions, errors, pending speech, dictation/sleep mode, and an open conversation/settings window prevent automatic closing. The microphone stays active while ordinary commands run.
 
 ### A few words worth knowing
 
 | Say or do | What happens |
 |---|---|
+| **“Start dictating” / “Done dictating”** | Switch between continuous writing and computer commands. |
+| **“Go to sleep” / “Wake up”** | Ignore ordinary speech until the wake phrase. The microphone stays active. |
+| **“What can I say?”** | Show the built-in command guide. |
 | **“Cancel that”** or **“Never mind”** | Stops the current task and its follow-ups; keeps listening and remembers earlier successful requests. It does not undo completed changes. |
 | **“Clear the queue”** | Drops waiting requests and pending untranscribed audio. The current task continues. |
 | **“Resume task”** | Continues Cua work after reviewing the conversation/settings. |
@@ -163,7 +169,7 @@ NotchPilot combines small local models with a desktop controller. It is **not en
 | **GPT-5 mini via OpenRouter** | Online | Default Cua action decisions; optional text composition. API usage is billed by the provider. |
 | **Jev via TypeSafe or OpenRouter** | Online, experimental | Alternative finite-choice controller. It is not used by the default Cua path. |
 
-Certain literal browser/folder requests and small Calculator operations use local paths without controller API calls. That does not make arbitrary computer use free: other tasks need online decisions, and inference is only part of their total latency.
+Dictation/corrections, native Save As, common app opening, and certain literal browser/folder requests and small Calculator operations use local paths without controller API calls. That does not make arbitrary computer use free: other tasks need online decisions, and inference is only part of their total latency.
 
 **Privacy in practical terms:** voice transcription runs locally. During online tasks, your request and observed app text are sent to the selected service. Normal runs do not retain command transcripts or screenshots; temporary audio/captures are removed after use. API keys stay in Keychain or your ignored `.env`. Developer tracing is opt-in and can contain screen text. Read the [data flow and architecture](docs/architecture.md) before enabling it.
 
@@ -171,17 +177,22 @@ Certain literal browser/folder requests and small Calculator operations use loca
 
 This is a working experiment with a growing test suite, not a claim that every desktop workflow is solved.
 
-**Exercised locally:** opening apps, literal browser tabs/URLs, simple verified Calculator arithmetic, TextEdit document creation and editing/saving an existing test file, short app chains, queue controls, pause/resume, cancellation, and dark mode.
+**Exercised locally:** opening apps, literal browser tabs/URLs, simple verified Calculator arithmetic, TextEdit continuous dictation/corrections and native Save As, short app chains, queue controls, sleep/wake, pause/resume, cancellation, and dark mode. See the [hands-free validation notes](docs/hands-free.md#verified-in-this-development-pass) for the distinction between transcript-driven desktop tests and real microphone testing.
 
 **Still needs work:**
 
 - Long or open-ended workflows can stall or exceed model limits. A model’s “done” is not independent proof of arbitrary task completion.
-- Attached dialogs, Save As, custom widgets, and general browser research remain uneven.
+- Standard TextEdit Save As now has a verified native route. Custom dialogs, format conversion, other editors, and general browser research remain uneven.
 - Finder can reach a folder while exposing an unresolvable file URL; NotchPilot then reports an unverified location instead of claiming success.
+- Dictation currently accepts background speech as well as the user’s voice. Sleep mode pauses it; speaker identification is not implemented.
 - English and the primary display are the current supported target. The pointer overlay is not an independent input seat; some actions still use system input.
 - Packaging, onboarding, and broader accessibility testing need work before this can be a dependable everyday assistant for everyone.
 
 See [Testing](docs/testing.md) for what was checked and how to reproduce the automated checks. Reports of specific, reproducible failures are welcome in [Issues](https://github.com/codebooker/NotchPilot/issues).
+
+### Exploring small local specialists
+
+We tested **Cua S1 Forms** on 60 fictional form decisions: **23/23 empty fields**, **51/60 overall**, at roughly **1.4 ms median CPU inference plus collation**. It also made confident mistakes on filled fields and buttons, so it remains experimental. [Read the results, limitations, and integration proposal →](docs/cua-s1-evaluation.md)
 
 ## For builders
 
@@ -193,6 +204,8 @@ NotchPilot/
 ├── Tests/               Native voice/session checks
 ├── worker.py            Host protocol and action routing
 ├── cua_agent.py         Default Cua controller
+├── whisper_session.cpp  Resident base.en recognizer over private pipes
+├── experiments/         Reproducible S1 and speech evaluations
 ├── planner.py           Local Qwen interpretation
 ├── navigation.py        Native browser navigation
 ├── download_models.py   Pinned downloads and checksum verification
@@ -206,7 +219,7 @@ After setup:
 .cache/notch-venv/bin/python -B -m unittest discover -s NotchPilot -p 'test_*.py'
 ```
 
-The published snapshot has **91 passing Python tests**, plus native voice and session checks. CI runs model-free Python tests, Swift typechecking, and voice segmentation/audio conversion; it does not drive a real desktop or call paid models.
+The published snapshot has **111 passing Python tests**, plus native voice and session checks. CI runs model-free Python tests, Swift typechecking, and voice segmentation/audio conversion; it does not drive a real desktop or call paid models.
 
 Read [CONTRIBUTING](CONTRIBUTING.md), [Architecture](docs/architecture.md), and [Testing](docs/testing.md) before changing input delivery, microphone behavior, or cancellation.
 

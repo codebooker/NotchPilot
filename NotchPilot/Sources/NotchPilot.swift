@@ -62,6 +62,8 @@ final class PilotState: ObservableObject {
     @Published var localInterpreter = UserDefaults.standard.object(forKey:"localInterpreter") as? Bool ?? true {
         didSet { UserDefaults.standard.set(localInterpreter,forKey:"localInterpreter") }
     }
+    @Published var dictating = false
+    @Published var voiceSleeping = false
     @Published var recording = false
     @Published var closeWhenDone = UserDefaults.standard.object(forKey:"closeWhenDone") as? Bool ?? true {
         didSet { UserDefaults.standard.set(closeWhenDone,forKey:"closeWhenDone") }
@@ -126,7 +128,7 @@ final class PilotState: ObservableObject {
         if needsAttention { return "Let’s try that again" }
         if reviewing { return reviewReady ? "Paused for you" : "Pausing…" }
         if busy { return phase == "Understanding locally" ? "Thinking…" : "Working…" }
-        return recording ? "I’m listening" : "Ready when you are"
+        return recording ? (voiceSleeping ? "Say wake up" : dictating ? "Dictating" : "I’m listening") : "Ready when you are"
     }
     var friendlyIssue: String { PilotCopy.issue(detail) }
     var compactMessage: String {
@@ -184,7 +186,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var handler: EventHandlerRef?
     var runtime: Runtime?
     var speech: SpeechCapture?
-    var transcriber: Process?
+    var transcribing = false
+    let whisperSession = WhisperSession()
     var audioQueue: [URL] = []
     var transcribingURL: URL?
     var voiceGeneration = UUID()
@@ -192,6 +195,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var commands = VoiceCommandQueue()
     var workerSucceeded = false
     let planner = PlannerClient()
+    let voiceEditor = VoiceEditor()
     var originalGoal = ""
     var resolvedGoal = ""
     var flightPlan: [String:Any]?
@@ -241,6 +245,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSApp.setActivationPolicy(.accessory)
         runtime = try? Runtime.load()
         refreshModels()
+        if state.whisperInstalled,let runtime { try? whisperSession.prepare(runtime) }
         let host = NSHostingView(rootView: PilotView(state: state))
         panel = FloatingPanel(contentRect: NSRect(x: 0, y: 0, width: 280, height: 44),
                               styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -248,11 +253,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.hasShadow = true; panel.level = .floating; panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isMovableByWindowBackground=true
-        cursor = NSWindow(contentRect: NSRect(origin:.zero,size:CursorView.size),
-                          styleMask: [.borderless], backing: .buffered, defer: false)
-        cursor.contentView = CursorView(); cursor.backgroundColor = .clear; cursor.isOpaque = false
-        cursor.ignoresMouseEvents = true; cursor.level = .screenSaver; cursor.hasShadow = false
-        cursor.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        cursor = CursorOverlay.makeWindow()
         cursorMotion=CursorMotion(window:cursor)
         state.beginVoice = { [weak self] in
             guard let self else { return }
@@ -413,7 +414,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
     func hotkey() {
-        if state.busy || state.recording || startingVoice || pendingVoiceStart || transcriber != nil { stop(close: true); return }
+        if state.busy || state.recording || startingVoice || pendingVoiceStart || transcribing { stop(close: true); return }
         openVoice()
     }
     func openVoice() {
@@ -541,33 +542,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func transcribeNext() {
-        guard transcriber == nil, !audioQueue.isEmpty, let runtime else { return }
+        guard !transcribing, !audioQueue.isEmpty, let runtime else { return }
         let url=audioQueue.removeFirst(); transcribingURL=url
-        let token=voiceGeneration; let epoch=audioEpoch; let process=Process(); let output=Pipe()
-        process.executableURL=URL(fileURLWithPath:runtime.whisper)
-        process.arguments=["-m",runtime.model,"-f",url.path,"-l","en","-nt","-np","-t","4",
-                           "--prompt","Voice commands for a Mac. Open TextEdit. Write a sentence. Type hello world."]
-        process.standardOutput=output; process.standardError=FileHandle.nullDevice
-        transcriber=process
+        let token=voiceGeneration; let epoch=audioEpoch
+        transcribing=true
         if !state.busy { state.phase="Listening · transcribing" }
-        do { try process.run() } catch { fail("Could not launch local Whisper."); return }
-        DispatchQueue.global(qos:.userInitiated).async { [weak self] in
-            let data=output.fileHandleForReading.readDataToEndOfFile(); process.waitUntilExit()
+        whisperSession.transcribe(runtime:runtime,url:url,dictation:state.dictating) { [weak self] result in
             try? FileManager.default.removeItem(at:url)
-            let text=String(data:data,encoding:.utf8)?.trimmingCharacters(in:.whitespacesAndNewlines) ?? ""
-            DispatchQueue.main.async {
-                guard let self, self.voiceGeneration==token, self.audioEpoch==epoch else { return }
-                self.transcriber=nil; self.transcribingURL=nil
-                guard process.terminationStatus==0 else { self.fail("Local transcription failed. Pending instructions were stopped."); return }
-                // Ignore Whisper's non-speech captions.
+            guard let self,self.voiceGeneration==token,self.audioEpoch==epoch else { return }
+            self.transcribing=false;self.transcribingURL=nil
+            switch result {
+            case .failure(let error): self.fail(error.localizedDescription);return
+            case .success(let text):
                 if !text.isEmpty && !(text.hasPrefix("[") && text.hasSuffix("]")) && !(text.hasPrefix("(") && text.hasSuffix(")")) {
                     self.acceptInstruction(text)
                 }
-                self.transcribeNext()
             }
+            self.transcribeNext()
         }
     }
     @discardableResult func handleSessionInstruction(_ text: String) -> Bool {
+        let phrase=VoiceCommandQueue.normalized(text)
+        if ["go to sleep","pause listening"].contains(phrase) {
+            cancelCurrentTask();state.voiceSleeping=true;state.detail="Paused. Say wake up or resume listening.";return true
+        }
+        if ["wake up","resume listening"].contains(phrase) {
+            state.voiceSleeping=false;state.phase="Listening";state.detail="I’m listening again.";return true
+        }
+        if state.voiceSleeping && !VoiceCommandQueue.isStop(text) { return true }
         if VoiceCommandQueue.isStop(text) { stop(close:true); return true }
         if VoiceCommandQueue.isCancelTask(text) { cancelCurrentTask(); return true }
         if state.reviewing && VoiceCommandQueue.isResumeTask(text) { resumeReviewedWork(); return true }
@@ -601,6 +603,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         autoCloseGeneration=UUID()
         state.waitingRequests=commands.pending; state.command=goal
         originalGoal=goal; dialogue=[]; resolvedGoal=""; flightPlan=nil; state.interpreted=""
+        if handleLocalVoiceCommand(goal) { return }
         interpretCommand()
     }
 
@@ -778,7 +781,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 fail("The target document changed before dictation. Nothing was typed.");return
             }
             do {
-                try HostKeyboard.insertText(text,spec:field,pid:front.processIdentifier,window:window,spacing:event["spacing"] as? Bool == true)
+                voiceEditor.record(try HostKeyboard.insertText(text,spec:field,pid:front.processIdentifier,window:window,spacing:event["spacing"] as? Bool == true))
                 ack(token)
             } catch { fail(error.localizedDescription) }
         case "host_key":
@@ -827,7 +830,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func hideCursor() { cursorMotion?.hide();cursor?.orderOut(nil) }
     func discardPendingAudio() {
         audioEpoch=UUID(); speech?.discardPendingSpeech(epoch:audioEpoch)
-        transcriber?.terminate(); transcriber=nil
+        whisperSession.cancelPending(); transcribing=false
         for url in audioQueue { try? FileManager.default.removeItem(at:url) }; audioQueue.removeAll()
         if let url=transcribingURL { try? FileManager.default.removeItem(at:url) }; transcribingURL=nil
     }
@@ -838,15 +841,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func stop(close: Bool) {
         autoCloseGeneration=UUID()
         generation=UUID(); stopAudio(); planner.cancel();clearReview()
+        state.dictating=false;state.voiceSleeping=false;voiceEditor.target=nil;voiceEditor.history.removeAll()
         try? input?.fileHandleForWriting.close();task?.terminate(); task=nil; input=nil; commands.cancel(); dialogue=[]; originalGoal=""; resolvedGoal=""
         state.question=""; state.answer=""; state.interpreted=""; state.requestDraft=""
         state.busy=false; state.waitingRequests=[]; state.phase="Stopped"; state.detail="Listening and all pending instructions stopped."
         hideCursor(); if close { panel.orderOut(nil);activityWindow?.orderOut(nil);preferences?.orderOut(nil);setEscapeShortcut(active:false) } else { showPanel(key:false) }
     }
     func autoCloseReady(at now: Date = Date()) -> Bool {
-        state.closeWhenDone && !state.busy && !state.needsAttention && state.question.isEmpty && commands.active==nil && commands.pending.isEmpty &&
+        state.closeWhenDone && !state.dictating && !state.voiceSleeping && !state.busy && !state.needsAttention && state.question.isEmpty && commands.active==nil && commands.pending.isEmpty &&
         activityWindow?.isVisible != true && preferences?.isVisible != true &&
-        transcriber==nil && audioQueue.isEmpty && speech?.hasPendingSpeech != true && now.timeIntervalSince(state.lastSpeech)>1.4
+        !transcribing && audioQueue.isEmpty && speech?.hasPendingSpeech != true && now.timeIntervalSince(state.lastSpeech)>1.4
     }
     func scheduleAutoClose() {
         guard state.closeWhenDone else { return }
@@ -1028,6 +1032,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     @objc func quit() { stop(close:true); NSApp.terminate(nil) }
     func applicationWillTerminate(_ notification: Notification) {
+        whisperSession.shutdown()
         stop(close:true); downloadTask?.terminate(); permissionTask?.terminate()
         if let localMonitor { NSEvent.removeMonitor(localMonitor); self.localMonitor=nil }
         if let hotKey { UnregisterEventHotKey(hotKey); self.hotKey=nil }

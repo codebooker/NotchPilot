@@ -9,6 +9,25 @@ import Foundation
         let owner=AppDelegate()
         owner.panel=FloatingPanel(contentRect:.zero,styleMask:[.borderless],backing:.buffered,defer:false)
         precondition(!owner.panel.canBecomeKey,"The voice strip must never capture keyboard focus from the working app")
+        precondition(VoiceEditCommand.parse("Open TextEdit.") == .openApp("com.apple.TextEdit"))
+        precondition(VoiceEditCommand.parse("Replace purple with blue.") == .replace("purple","blue"))
+        precondition(VoiceEditCommand.parse("Next field") == .key("tab"))
+        precondition(VoiceEditCommand.parse("Press shift tab") == .key("backtab"))
+        precondition(VoiceEditCommand.parse("Open arbitrary unknown app") == nil)
+        precondition(VoiceEditCommand.parse("Start dictating!") == .start)
+        precondition(VoiceEditCommand.parse("Done dictating.") == .end)
+        precondition(VoiceEditCommand.parse("Scratch that.") == .scratch)
+        precondition(VoiceEditCommand.parse("New paragraph") == .insert("\n\n"))
+        precondition(VoiceEditCommand.parse("Type exactly stop") == .insert("stop"))
+        precondition(VoiceEditCommand.parse("Replace purple with blue") == .replace("purple","blue"))
+        precondition(VoiceEditCommand.parse("Save as My Note.txt on my desktop") == .saveAs("~/Desktop/My Note.txt"))
+        precondition(VoiceEditCommand.parse("Save as /tmp/name.") == .saveAs("/tmp/name."))
+        precondition(VoiceEditCommand.parse("The boy said stop.")==nil)
+        precondition(VoiceEditor.uniqueRange("cat",in:"A CAT") == NSRange(location:2,length:3))
+        precondition(VoiceEditor.uniqueRange("cat",in:"cat cat")==nil)
+        precondition(VoiceEditor.uniqueRange("missing",in:"text")==nil)
+        precondition(VoiceEditor.uniqueRange("hi",in:"😀 hi") == NSRange(location:3,length:2))
+        do { _=try SaveRecovery.destination("relative.txt");preconditionFailure("Relative save must not guess a folder") } catch {}
         precondition(HostKeyboard.codes["arbitrary_command"]==nil)
         precondition(HostKeyboard.insertion("Next sentence.",into:"First.",range:NSRange(location:6,length:0),spacing:true)?.result=="First. Next sentence.")
         precondition(HostKeyboard.insertion("Next",into:"First. ",range:NSRange(location:7,length:0),spacing:true)?.result=="First. Next")
@@ -19,7 +38,9 @@ import Foundation
         precondition(HostKeyboard.insertion("Hi",into:"😀",range:NSRange(location:2,length:0),spacing:true)?.result=="😀Hi")
         precondition(HostKeyboard.insertion("x",into:"a",range:NSRange(location:2,length:0),spacing:true)==nil)
         precondition(!HostKeyboard.focus(["role":"AXButton"],pid:-1),"Only a valid observed editable field can receive targeted keyboard input")
-        owner.cursor=NSWindow(contentRect:.zero,styleMask:[.borderless],backing:.buffered,defer:false)
+        owner.cursor=CursorOverlay.makeWindow()
+        precondition(!owner.cursor.isOpaque && owner.cursor.backgroundColor.alphaComponent==0 && !owner.cursor.hasShadow,
+                     "The production and test cursor must share a transparent, shadowless window")
         let capture=SpeechCapture()
         capture.running=true; capture.segmenter=SpeechSegmenter(sampleRate:16000)
         owner.speech=capture; owner.state.recording=true; owner.state.busy=true
@@ -56,6 +77,12 @@ import Foundation
         precondition(owner.commands.pending.isEmpty && owner.state.waitingRequests.isEmpty)
         precondition(owner.commands.active=="Current request" && owner.generation==clearingGeneration && owner.state.busy)
         precondition(owner.state.requestDraft=="Unsubmitted draft","Clearing submitted requests must preserve an unsubmitted draft")
+        owner.acceptInstruction("Go to sleep")
+        precondition(owner.state.voiceSleeping && owner.state.recording && !owner.state.busy)
+        owner.acceptInstruction("These words must be ignored")
+        precondition(owner.commands.pending.isEmpty && owner.commands.active==nil)
+        owner.acceptInstruction("Wake up")
+        precondition(!owner.state.voiceSleeping && owner.state.recording)
         owner.acceptInstruction("Dependent request")
         let cancelledWork=owner.generation;let sameMicrophone=owner.voiceGeneration
         owner.acceptInstruction("Cancel that.")
@@ -73,6 +100,8 @@ import Foundation
         // The capture is synthetic (no installed audio tap), so detach it before explicit stop.
         owner.speech=nil;owner.stop(close:true)
         precondition(!owner.state.recording && owner.commands.context.isEmpty && owner.commands.pending.isEmpty)
+        precondition(PilotCopy.issue("That file already exists.")=="Choose a different filename.")
+        precondition(PilotCopy.issue("Speech recognition took too long.")=="Speech stalled. Please try again.")
         precondition(PilotCopy.issue("The model service took too long to reply.")=="Slow connection. Please try again.")
         precondition(PilotCopy.issue("Cua can see this window, but its controls are unavailable.")=="This window needs your help.")
         precondition(PilotCopy.issue("This part of the task reached its step limit.")=="Please split this into smaller requests.")
@@ -103,8 +132,12 @@ import Foundation
         precondition(CursorTiming.duration(distance:1,reducedMotion:false)==0.24)
         precondition(CursorTiming.duration(distance:5000,reducedMotion:false)==0.52)
         precondition(CursorTiming.duration(distance:5000,reducedMotion:true)==0)
-        owner.cursor.setContentSize(CursorView.size)
-        owner.cursor.contentView=CursorView(frame:NSRect(origin:.zero,size:CursorView.size))
+        if let view=owner.cursor.contentView,let bitmap=view.bitmapImageRepForCachingDisplay(in:view.bounds) {
+            view.cacheDisplay(in:view.bounds,to:bitmap)
+            for point in [(0,0),(bitmap.pixelsWide-1,0),(0,bitmap.pixelsHigh-1),(bitmap.pixelsWide-1,bitmap.pixelsHigh-1)] {
+                precondition(bitmap.colorAt(x:point.0,y:point.1)?.alphaComponent==0,"Empty cursor space must render transparent")
+            }
+        } else { preconditionFailure("The cursor must be renderable") }
         if let index=CommandLine.arguments.firstIndex(of:"--cursor-preview"),CommandLine.arguments.count>index+1,
            let view=owner.cursor.contentView,let bitmap=view.bitmapImageRepForCachingDisplay(in:view.bounds) {
             view.cacheDisplay(in:view.bounds,to:bitmap)
@@ -199,6 +232,20 @@ import Foundation
         precondition(owner.state.detail==beforeStaleKey,"Cancelled generations must never issue keyboard input")
         owner.receive(["event":"host_key","pid":-1,"key":"return"],token:owner.generation)
         precondition(owner.state.detail.contains("active app changed"),"Host keyboard input must reject a different foreground app")
+        // A hung recognizer must time out once; cancelled callbacks must never insert text.
+        let stalled=Runtime(root:"",python:"",worker:"",whisper:"/bin/sleep",model:"10",planner:"",qwen:"",downloader:"")
+        let recognizer=WhisperSession(requestTimeout:0.12)
+        var timedOut=0;var cancelledTranscripts=0
+        recognizer.transcribe(runtime:stalled,url:URL(fileURLWithPath:"/tmp/test.wav"),dictation:true) { _ in cancelledTranscripts += 1 }
+        recognizer.cancelPending()
+        RunLoop.current.run(until:Date().addingTimeInterval(0.18))
+        precondition(cancelledTranscripts==0,"Cancelled speech must not return a transcript")
+        recognizer.transcribe(runtime:stalled,url:URL(fileURLWithPath:"/tmp/test.wav"),dictation:true) { result in
+            if case .failure=result { timedOut += 1 }
+        }
+        RunLoop.current.run(until:Date().addingTimeInterval(0.3))
+        precondition(timedOut==1,"A hung recognizer must fail once and allow restart")
+        recognizer.shutdown()
         print("Session tests passed: recovery, cancellation, continuous voice, auto-close, strip visibility, cursor easing, arrival gating, and fade cancellation.")
     }
 }

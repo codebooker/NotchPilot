@@ -1,5 +1,7 @@
 # Testing NotchPilot
 
+See [Hands-free use and validation](hands-free.md) for persistent speech, corrections, sleep/wake, and the new TextEdit Save As recovery route. The older reports below describe the behavior before that route.
+
 See the [latest regression report](regressions-2026-09-21.md) for ten live trials, the fixes they informed, and remaining Save As limitations.
 
 See the [dictation regression report](dictation-regression.md) for the open-document writing fix, caret/selection tests, and speech-replay limits.
@@ -52,7 +54,7 @@ swiftc -swift-version 5 -D SESSION_TESTS -parse-as-library \
 NotchPilot/build/session-tests
 ```
 
-Tests cover continuous voice recovery, auto-close, draft/queue handling, review pause/resume, closing a paused worker, stale callbacks, exact input guards, and cursor timing/edge placement. The app’s global keyboard implementation intentionally avoids an all-key event monitor, which previously caused doubled physical keystrokes.
+Tests cover recognizer timeout/cancellation, dictation command parsing, unique Unicode selection ranges, continuous voice recovery, auto-close, draft/queue handling, review pause/resume, closing a paused worker, stale callbacks, exact input guards, and cursor timing/edge placement. The app’s global keyboard implementation intentionally avoids an all-key event monitor, which previously caused doubled physical keystrokes.
 
 For a rendered cursor preview:
 
@@ -86,6 +88,28 @@ Use disposable documents and public sample URLs. Confirm results in the target a
 | Dark / Light / System | Legible fields/buttons, native title bars, persisted selection. |
 | Physical typing while open | One character per physical keypress. |
 
-The published code was exercised in these categories during development, with both successful and failed runs. Known remaining failures include longer model-driven chains, attached dialogs, and Finder location verification when macOS exposes an unresolvable file-reference URL. A roughly 13-second local Calculator smoke run was observed on the development Mac; it is not a cross-machine performance promise.
+The published code was exercised in these categories during development, with both successful and failed runs. Known remaining failures include longer model-driven chains, custom attached dialogs, and Finder location verification when macOS exposes an unresolvable file-reference URL. A roughly 13-second local Calculator smoke run was observed on the development Mac; it is not a cross-machine performance promise.
 
 CI runs Python tests, Swift typechecking, and native voice checks. It does not test live microphone capture, macOS permission prompts, paid API responses, or arbitrary desktop workflows.
+
+## Persistent Whisper replay
+
+The [recorded comparison](../NotchPilot/experiments/results/whisper-session.json) used one local “Open Finder” test recording with base.en: 108 ms helper startup, 46 ms median warm transcription, and 168 ms median per-process CLI transcription. The first persistent transcription took 67 ms. All recognized the phrase; an invalid-file request returned an error and the next valid request succeeded. This excludes microphone endpointing and desktop execution and does not establish a general app speedup.
+
+With setup complete and your own mono 16 kHz WAV:
+
+```sh
+python3 NotchPilot/experiments/eval_whisper_session.py \
+  --session NotchPilot/build/NotchPilot.app/Contents/Resources/whisper-session \
+  --cli .cache/whisper.cpp/build/bin/whisper-cli \
+  --model .cache/whisper-models/ggml-base.en.bin \
+  --audio /path/to/test.wav --output /tmp/whisper-results.json
+```
+
+The helper uses the pinned CLI's optimized flash-attention setting. The app prewarms it when the speech model is installed. The cursor test now uses the same transparent window factory as the app and checks zero-alpha corners in its rendered bitmap. This fixes an opaque gray test-window background that appeared during live test runs.
+
+Native session tests separately check that cancelled callbacks stay silent and a nonresponding helper times out once.
+
+## S1 Forms
+
+See the [S1 evaluation](cua-s1-evaluation.md) for source/model pins, 60 fictional decisions, CPU timings, upstream tests, and a separate browser delivery smoke that verified only six of eight fields. It is not included in the ordinary unit suite or default runtime.

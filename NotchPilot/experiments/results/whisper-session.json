@@ -1,0 +1,49 @@
+{
+  "scope": "One test recording; excludes microphone endpointing and action execution",
+  "startup_seconds": 0.10779158398509026,
+  "persistent": [
+    {
+      "event": "transcript",
+      "id": "0",
+      "seconds": 0.067014291,
+      "text": " Open Finder.",
+      "wall_seconds": 0.06735745794139802
+    },
+    {
+      "event": "transcript",
+      "id": "1",
+      "seconds": 0.046392,
+      "text": " Open Finder.",
+      "wall_seconds": 0.04660150012932718
+    },
+    {
+      "event": "transcript",
+      "id": "2",
+      "seconds": 0.044901708,
+      "text": " Open Finder.",
+      "wall_seconds": 0.04510004189796746
+    },
+    {
+      "event": "transcript",
+      "id": "3",
+      "seconds": 0.045655333,
+      "text": " Open Finder.",
+      "wall_seconds": 0.04581708298064768
+    }
+  ],
+  "cli": [
+    {
+      "seconds": 0.1676455419510603,
+      "text": "Open Finder."
+    },
+    {
+      "seconds": 0.16514804190956056,
+      "text": "Open Finder."
+    },
+    {
+      "seconds": 0.16914620902389288,
+      "text": "Open Finder."
+    }
+  ],
+  "error_recovery": true
+}

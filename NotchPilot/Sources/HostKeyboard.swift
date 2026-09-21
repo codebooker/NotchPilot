@@ -57,7 +57,7 @@ enum HostKeyboard {
         return (inserted,original.replacingCharacters(in:range,with:inserted))
     }
 
-    static func insertText(_ text: String, spec: [String:Any], pid: pid_t, window: Int, spacing: Bool) throws {
+    static func insertText(_ text: String, spec: [String:Any], pid: pid_t, window: Int, spacing: Bool) throws -> DictationEdit {
         func problem(_ message:String) -> NSError { NSError(domain:"NotchPilot",code:1,userInfo:[NSLocalizedDescriptionKey:message]) }
         guard focus(spec,pid:pid) else { throw problem("Could not focus the document. Nothing was typed.") }
         let app=AXUIElementCreateApplication(pid)
@@ -84,6 +84,8 @@ enum HostKeyboard {
         guard attribute(field,kAXValueAttribute) as? String == change.result else {
             throw problem("Text entry could not be verified. Check the document; the input was not retried.")
         }
+        return DictationEdit(pid:pid,window:window,field:field,before:before,after:change.result,
+                             range:NSRange(location:selection.location,length:selection.length),inserted:change.text)
     }
 
     static func frontWindow(pid: pid_t, bundle: String?) -> Int? {

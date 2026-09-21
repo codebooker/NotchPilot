@@ -1,5 +1,17 @@
 import AppKit
 
+enum CursorOverlay {
+    static func makeWindow() -> NSWindow {
+        let window=NSWindow(contentRect:NSRect(origin:.zero,size:CursorView.size),
+                            styleMask:[.borderless],backing:.buffered,defer:false)
+        window.backgroundColor = .clear;window.isOpaque=false;window.hasShadow=false
+        window.contentView=CursorView(frame:NSRect(origin:.zero,size:CursorView.size))
+        window.ignoresMouseEvents=true;window.level = .screenSaver
+        window.collectionBehavior=[.canJoinAllSpaces,.fullScreenAuxiliary,.stationary]
+        return window
+    }
+}
+
 final class CursorView: NSView {
     // Transparent space allows the badge to move away from screen edges without
     // shifting the pointer's hotspot or the actual input target.
@@ -12,6 +24,7 @@ final class CursorView: NSView {
     var appName=""
     var badgeOrigin=NSPoint(x:88,y:82)
     override var isFlipped: Bool { true }
+    override var isOpaque: Bool { false }
 
     func configure(_ event:[String:Any]) {
         kind=event["kind"] as? String ?? "click"
@@ -35,6 +48,7 @@ final class CursorView: NSView {
         tinted.draw(in:rect,from:.zero,operation:.sourceOver,fraction:1,respectFlipped:true,hints:nil)
     }
     override func draw(_ dirtyRect: NSRect) {
+        NSColor.clear.setFill();dirtyRect.fill(using:.copy)
         let violet=Self.lavender
         NSGraphicsContext.saveGraphicsState()
         let offset=NSAffineTransform();offset.translateX(by:Self.hotspot.x,yBy:Self.hotspot.y);offset.concat()

@@ -11,6 +11,7 @@ final class SpeechCapture {
     func setPause(_ seconds: Double) {
         queue.sync { pauseDuration=seconds; segmenter?.setPause(seconds) }
     }
+    func setDictation(_ enabled:Bool) { queue.sync { segmenter?.maxDuration=enabled ? 120 : 30 } }
     var running = false
     var segmentEpoch = UUID()
     var lastMeter = Date.distantPast
@@ -41,7 +42,7 @@ final class SpeechCapture {
                 }
                 if self.segmenter?.overflow == true {
                     self.segmenter?.overflow = false
-                    self.onError?("That phrase exceeded 30 seconds and was discarded. Pause, then try a shorter instruction.")
+                    self.onError?("That phrase exceeded the recording limit and was discarded. Pause, then try a shorter phrase.")
                 }
                 if Date().timeIntervalSince(self.lastMeter) > 0.08 {
                     self.lastMeter = Date()

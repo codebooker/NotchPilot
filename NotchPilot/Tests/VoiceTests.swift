@@ -50,6 +50,12 @@ import AVFoundation
         precondition(changedCount==2,"The next phrase uses the new pause")
         precondition(SpeechSegmenter(sampleRate:16000,pause:0).pause==1)
         precondition(SpeechSegmenter(sampleRate:16000,pause:100).pause==3)
+        var longDictation=SpeechSegmenter(sampleRate:16000)
+        longDictation.maxDuration=120
+        for _ in 0..<350 { precondition(longDictation.append(voice)==nil) }
+        var longCount=0
+        for _ in 0..<15 { if longDictation.append(silence) != nil { longCount += 1 } }
+        precondition(longCount==1 && !longDictation.overflow,"Dictation accepts a phrase longer than the command limit")
         var queue=VoiceCommandQueue()
         precondition(queue.enqueue("Open Finder")); precondition(queue.next()=="Open Finder")
         precondition(queue.enqueue("Go to Documents")); precondition(queue.enqueue("Open notes.txt"))

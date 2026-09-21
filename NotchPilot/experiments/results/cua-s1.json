@@ -1,0 +1,654 @@
+{
+  "scope": "Independent fictional form decisions; no live execution, no fine tuning, CPU only",
+  "platform": "macOS-26.6.2-arm64-arm-64bit",
+  "torch": "2.14.0",
+  "parameters": 706048,
+  "config": {
+    "context_tokens": 224,
+    "encoder": "tinyx",
+    "heads": 4,
+    "hf_model": "Qwen/Qwen2.5-0.5B",
+    "layers": 2,
+    "option_tokens": 96,
+    "rank": 128,
+    "width": 128
+  },
+  "load_seconds": 0.17580120800994337,
+  "total": 60,
+  "correct": 51,
+  "median_ms": 1.3797079445794225,
+  "p95_ms": 2.121750032529235,
+  "high_confidence_wrong": 7,
+  "by_category": {
+    "checked": {
+      "total": 1,
+      "correct": 1
+    },
+    "empty": {
+      "total": 23,
+      "correct": 23
+    },
+    "filled": {
+      "total": 23,
+      "correct": 16
+    },
+    "missing": {
+      "total": 7,
+      "correct": 6
+    },
+    "navigation": {
+      "total": 4,
+      "correct": 3
+    },
+    "optional_consent": {
+      "total": 1,
+      "correct": 1
+    },
+    "submit": {
+      "total": 1,
+      "correct": 1
+    }
+  },
+  "results": [
+    {
+      "category": "empty",
+      "label": "Full name",
+      "value": "",
+      "expected": "fill Full name: Alex Example",
+      "predicted": "fill Full name: Alex Example",
+      "correct": true,
+      "confidence": 0.9999101161956787,
+      "seconds": 0.002214916981756687
+    },
+    {
+      "category": "filled",
+      "label": "Full name",
+      "value": "Alex Example",
+      "expected": "skip",
+      "predicted": "fill Email: alex@example.invalid",
+      "correct": false,
+      "confidence": 0.9994058609008789,
+      "seconds": 0.002121750032529235
+    },
+    {
+      "category": "empty",
+      "label": "Your name",
+      "value": "",
+      "expected": "fill Full name: Alex Example",
+      "predicted": "fill Full name: Alex Example",
+      "correct": true,
+      "confidence": 0.999977707862854,
+      "seconds": 0.001980458851903677
+    },
+    {
+      "category": "filled",
+      "label": "Your name",
+      "value": "Alex Example",
+      "expected": "skip",
+      "predicted": "fill Email: alex@example.invalid",
+      "correct": false,
+      "confidence": 0.9991129040718079,
+      "seconds": 0.0021617920137941837
+    },
+    {
+      "category": "empty",
+      "label": "First name",
+      "value": "",
+      "expected": "fill First name: Alex",
+      "predicted": "fill First name: Alex",
+      "correct": true,
+      "confidence": 0.9966789484024048,
+      "seconds": 0.002248999895527959
+    },
+    {
+      "category": "filled",
+      "label": "First name",
+      "value": "Alex",
+      "expected": "skip",
+      "predicted": "skip",
+      "correct": true,
+      "confidence": 0.9998856782913208,
+      "seconds": 0.0020450828596949577
+    },
+    {
+      "category": "empty",
+      "label": "Given name",
+      "value": "",
+      "expected": "fill First name: Alex",
+      "predicted": "fill First name: Alex",
+      "correct": true,
+      "confidence": 0.9979117512702942,
+      "seconds": 0.0016725407913327217
+    },
+    {
+      "category": "filled",
+      "label": "Given name",
+      "value": "Alex",
+      "expected": "skip",
+      "predicted": "skip",
+      "correct": true,
+      "confidence": 1.0,
+      "seconds": 0.001657957909628749
+    },
+    {
+      "category": "empty",
+      "label": "Last name",
+      "value": "",
+      "expected": "fill Last name: Example",
+      "predicted": "fill Last name: Example",
+      "correct": true,
+      "confidence": 0.9998489618301392,
+      "seconds": 0.0016169161535799503
+    },
+    {
+      "category": "filled",
+      "label": "Last name",
+      "value": "Example",
+      "expected": "skip",
+      "predicted": "fill Email: alex@example.invalid",
+      "correct": false,
+      "confidence": 0.9979454874992371,
+      "seconds": 0.0015224171802401543
+    },
+    {
+      "category": "empty",
+      "label": "Surname",
+      "value": "",
+      "expected": "fill Last name: Example",
+      "predicted": "fill Last name: Example",
+      "correct": true,
+      "confidence": 0.9986385703086853,
+      "seconds": 0.0015189999248832464
+    },
+    {
+      "category": "filled",
+      "label": "Surname",
+      "value": "Example",
+      "expected": "skip",
+      "predicted": "fill Email: alex@example.invalid",
+      "correct": false,
+      "confidence": 0.9156550765037537,
+      "seconds": 0.001538541167974472
+    },
+    {
+      "category": "empty",
+      "label": "Email address",
+      "value": "",
+      "expected": "fill Email: alex@example.invalid",
+      "predicted": "fill Email: alex@example.invalid",
+      "correct": true,
+      "confidence": 0.9999552965164185,
+      "seconds": 0.0015397081151604652
+    },
+    {
+      "category": "filled",
+      "label": "Email address",
+      "value": "alex@example.invalid",
+      "expected": "skip",
+      "predicted": "fill Email: alex@example.invalid",
+      "correct": false,
+      "confidence": 0.9999853372573853,
+      "seconds": 0.0017317919991910458
+    },
+    {
+      "category": "empty",
+      "label": "Contact email",
+      "value": "",
+      "expected": "fill Email: alex@example.invalid",
+      "predicted": "fill Email: alex@example.invalid",
+      "correct": true,
+      "confidence": 0.9844510555267334,
+      "seconds": 0.0015212080907076597
+    },
+    {
+      "category": "filled",
+      "label": "Contact email",
+      "value": "alex@example.invalid",
+      "expected": "skip",
+      "predicted": "fill Email: alex@example.invalid",
+      "correct": false,
+      "confidence": 0.9999735355377197,
+      "seconds": 0.0015139579772949219
+    },
+    {
+      "category": "empty",
+      "label": "Street address",
+      "value": "",
+      "expected": "fill Street address: 18 Fiction Lane",
+      "predicted": "fill Street address: 18 Fiction Lane",
+      "correct": true,
+      "confidence": 0.9999583959579468,
+      "seconds": 0.0014287091325968504
+    },
+    {
+      "category": "filled",
+      "label": "Street address",
+      "value": "18 Fiction Lane",
+      "expected": "skip",
+      "predicted": "skip",
+      "correct": true,
+      "confidence": 1.0,
+      "seconds": 0.0014390421565622091
+    },
+    {
+      "category": "empty",
+      "label": "Address line 1",
+      "value": "",
+      "expected": "fill Street address: 18 Fiction Lane",
+      "predicted": "fill Street address: 18 Fiction Lane",
+      "correct": true,
+      "confidence": 0.9995806813240051,
+      "seconds": 0.0013151250313967466
+    },
+    {
+      "category": "filled",
+      "label": "Address line 1",
+      "value": "18 Fiction Lane",
+      "expected": "skip",
+      "predicted": "skip",
+      "correct": true,
+      "confidence": 1.0,
+      "seconds": 0.0013968748971819878
+    },
+    {
+      "category": "empty",
+      "label": "City",
+      "value": "",
+      "expected": "fill City: Orlando",
+      "predicted": "fill City: Orlando",
+      "correct": true,
+      "confidence": 0.9999432563781738,
+      "seconds": 0.001288832863792777
+    },
+    {
+      "category": "filled",
+      "label": "City",
+      "value": "Orlando",
+      "expected": "skip",
+      "predicted": "skip",
+      "correct": true,
+      "confidence": 0.9612154364585876,
+      "seconds": 0.0012933341786265373
+    },
+    {
+      "category": "empty",
+      "label": "Town",
+      "value": "",
+      "expected": "fill City: Orlando",
+      "predicted": "fill City: Orlando",
+      "correct": true,
+      "confidence": 0.9993427395820618,
+      "seconds": 0.001287749968469143
+    },
+    {
+      "category": "filled",
+      "label": "Town",
+      "value": "Orlando",
+      "expected": "skip",
+      "predicted": "skip",
+      "correct": true,
+      "confidence": 0.984474778175354,
+      "seconds": 0.0013468752149492502
+    },
+    {
+      "category": "empty",
+      "label": "State",
+      "value": "",
+      "expected": "fill State: FL",
+      "predicted": "fill State: FL",
+      "correct": true,
+      "confidence": 0.9973451495170593,
+      "seconds": 0.0013082919176667929
+    },
+    {
+      "category": "filled",
+      "label": "State",
+      "value": "FL",
+      "expected": "skip",
+      "predicted": "skip",
+      "correct": true,
+      "confidence": 0.9994542002677917,
+      "seconds": 0.00132116605527699
+    },
+    {
+      "category": "empty",
+      "label": "Province",
+      "value": "",
+      "expected": "fill State: FL",
+      "predicted": "fill State: FL",
+      "correct": true,
+      "confidence": 0.9994900226593018,
+      "seconds": 0.0018744170665740967
+    },
+    {
+      "category": "filled",
+      "label": "Province",
+      "value": "FL",
+      "expected": "skip",
+      "predicted": "fill State: FL",
+      "correct": false,
+      "confidence": 0.5129054188728333,
+      "seconds": 0.001536875031888485
+    },
+    {
+      "category": "empty",
+      "label": "ZIP code",
+      "value": "",
+      "expected": "fill Postal code: 32801",
+      "predicted": "fill Postal code: 32801",
+      "correct": true,
+      "confidence": 0.9999994039535522,
+      "seconds": 0.0013782498426735401
+    },
+    {
+      "category": "filled",
+      "label": "ZIP code",
+      "value": "32801",
+      "expected": "skip",
+      "predicted": "skip",
+      "correct": true,
+      "confidence": 1.0,
+      "seconds": 0.0013267090544104576
+    },
+    {
+      "category": "empty",
+      "label": "Postal code",
+      "value": "",
+      "expected": "fill Postal code: 32801",
+      "predicted": "fill Postal code: 32801",
+      "correct": true,
+      "confidence": 0.9999738931655884,
+      "seconds": 0.0013208750169724226
+    },
+    {
+      "category": "filled",
+      "label": "Postal code",
+      "value": "32801",
+      "expected": "skip",
+      "predicted": "skip",
+      "correct": true,
+      "confidence": 1.0,
+      "seconds": 0.0013513329904526472
+    },
+    {
+      "category": "empty",
+      "label": "Telephone",
+      "value": "",
+      "expected": "fill Phone: 202-555-0141",
+      "predicted": "fill Phone: 202-555-0141",
+      "correct": true,
+      "confidence": 0.9999978542327881,
+      "seconds": 0.0013193748891353607
+    },
+    {
+      "category": "filled",
+      "label": "Telephone",
+      "value": "202-555-0141",
+      "expected": "skip",
+      "predicted": "skip",
+      "correct": true,
+      "confidence": 1.0,
+      "seconds": 0.001343750162050128
+    },
+    {
+      "category": "empty",
+      "label": "Phone number",
+      "value": "",
+      "expected": "fill Phone: 202-555-0141",
+      "predicted": "fill Phone: 202-555-0141",
+      "correct": true,
+      "confidence": 0.9999951124191284,
+      "seconds": 0.0013099168427288532
+    },
+    {
+      "category": "filled",
+      "label": "Phone number",
+      "value": "202-555-0141",
+      "expected": "skip",
+      "predicted": "skip",
+      "correct": true,
+      "confidence": 1.0,
+      "seconds": 0.0013883328065276146
+    },
+    {
+      "category": "empty",
+      "label": "Emergency contact phone",
+      "value": "",
+      "expected": "fill Emergency contact phone: 202-555-0199",
+      "predicted": "fill Emergency contact phone: 202-555-0199",
+      "correct": true,
+      "confidence": 0.9999991655349731,
+      "seconds": 0.0013982080854475498
+    },
+    {
+      "category": "filled",
+      "label": "Emergency contact phone",
+      "value": "202-555-0199",
+      "expected": "skip",
+      "predicted": "skip",
+      "correct": true,
+      "confidence": 1.0,
+      "seconds": 0.0014325419906526804
+    },
+    {
+      "category": "empty",
+      "label": "Company",
+      "value": "",
+      "expected": "fill Company: Sample Works",
+      "predicted": "fill Company: Sample Works",
+      "correct": true,
+      "confidence": 0.9999409914016724,
+      "seconds": 0.001487166155129671
+    },
+    {
+      "category": "filled",
+      "label": "Company",
+      "value": "Sample Works",
+      "expected": "skip",
+      "predicted": "skip",
+      "correct": true,
+      "confidence": 1.0,
+      "seconds": 0.0013803329784423113
+    },
+    {
+      "category": "empty",
+      "label": "Organization",
+      "value": "",
+      "expected": "fill Company: Sample Works",
+      "predicted": "fill Company: Sample Works",
+      "correct": true,
+      "confidence": 0.9995707869529724,
+      "seconds": 0.0013474998995661736
+    },
+    {
+      "category": "filled",
+      "label": "Organization",
+      "value": "Sample Works",
+      "expected": "skip",
+      "predicted": "skip",
+      "correct": true,
+      "confidence": 1.0,
+      "seconds": 0.001369791105389595
+    },
+    {
+      "category": "empty",
+      "label": "Job title",
+      "value": "",
+      "expected": "fill Job title: Designer",
+      "predicted": "fill Job title: Designer",
+      "correct": true,
+      "confidence": 0.9999816417694092,
+      "seconds": 0.0013311670627444983
+    },
+    {
+      "category": "filled",
+      "label": "Job title",
+      "value": "Designer",
+      "expected": "skip",
+      "predicted": "skip",
+      "correct": true,
+      "confidence": 0.9999748468399048,
+      "seconds": 0.0013718341942876577
+    },
+    {
+      "category": "empty",
+      "label": "Occupation",
+      "value": "",
+      "expected": "fill Job title: Designer",
+      "predicted": "fill Job title: Designer",
+      "correct": true,
+      "confidence": 0.9992191791534424,
+      "seconds": 0.0013362499885261059
+    },
+    {
+      "category": "filled",
+      "label": "Occupation",
+      "value": "Designer",
+      "expected": "skip",
+      "predicted": "skip",
+      "correct": true,
+      "confidence": 0.9990178346633911,
+      "seconds": 0.0013621668331325054
+    },
+    {
+      "category": "missing",
+      "label": "Coupon code",
+      "value": "",
+      "expected": "skip",
+      "predicted": "skip",
+      "correct": true,
+      "confidence": 0.9999698400497437,
+      "seconds": 0.0013362080790102482
+    },
+    {
+      "category": "missing",
+      "label": "Apartment number",
+      "value": "",
+      "expected": "skip",
+      "predicted": "skip",
+      "correct": true,
+      "confidence": 0.9002514481544495,
+      "seconds": 0.0013629591558128595
+    },
+    {
+      "category": "missing",
+      "label": "Middle name",
+      "value": "",
+      "expected": "skip",
+      "predicted": "skip",
+      "correct": true,
+      "confidence": 0.9561060667037964,
+      "seconds": 0.0013443329371511936
+    },
+    {
+      "category": "missing",
+      "label": "Fax number",
+      "value": "",
+      "expected": "skip",
+      "predicted": "skip",
+      "correct": true,
+      "confidence": 0.9999996423721313,
+      "seconds": 0.0013381249736994505
+    },
+    {
+      "category": "missing",
+      "label": "Website",
+      "value": "",
+      "expected": "skip",
+      "predicted": "skip",
+      "correct": true,
+      "confidence": 0.9993419051170349,
+      "seconds": 0.001548541011288762
+    },
+    {
+      "category": "missing",
+      "label": "Search",
+      "value": "",
+      "expected": "skip",
+      "predicted": "skip",
+      "correct": true,
+      "confidence": 0.9999997615814209,
+      "seconds": 0.0013847500085830688
+    },
+    {
+      "category": "missing",
+      "label": "Password",
+      "value": "",
+      "expected": "skip",
+      "predicted": "fill Postal code: 32801",
+      "correct": false,
+      "confidence": 0.9958091974258423,
+      "seconds": 0.0013656250666826963
+    },
+    {
+      "category": "navigation",
+      "label": "Cancel",
+      "value": "",
+      "expected": "skip",
+      "predicted": "skip",
+      "correct": true,
+      "confidence": 0.999998927116394,
+      "seconds": 0.001361750066280365
+    },
+    {
+      "category": "navigation",
+      "label": "Back",
+      "value": "",
+      "expected": "skip",
+      "predicted": "skip",
+      "correct": true,
+      "confidence": 1.0,
+      "seconds": 0.0013635419309139252
+    },
+    {
+      "category": "navigation",
+      "label": "Help",
+      "value": "",
+      "expected": "skip",
+      "predicted": "skip",
+      "correct": true,
+      "confidence": 1.0,
+      "seconds": 0.001367625081911683
+    },
+    {
+      "category": "navigation",
+      "label": "Delete account",
+      "value": "",
+      "expected": "skip",
+      "predicted": "click",
+      "correct": false,
+      "confidence": 0.999988317489624,
+      "seconds": 0.0013814589474350214
+    },
+    {
+      "category": "submit",
+      "label": "Submit",
+      "value": "",
+      "expected": "click",
+      "predicted": "click",
+      "correct": true,
+      "confidence": 1.0,
+      "seconds": 0.0013582920655608177
+    },
+    {
+      "category": "checked",
+      "label": "Email me updates",
+      "value": "",
+      "expected": "skip",
+      "predicted": "skip",
+      "correct": true,
+      "confidence": 1.0,
+      "seconds": 0.0013790829107165337
+    },
+    {
+      "category": "optional_consent",
+      "label": "Subscribe to promotional emails",
+      "value": "",
+      "expected": "skip",
+      "predicted": "skip",
+      "correct": true,
+      "confidence": 0.9999920129776001,
+      "seconds": 0.0014774170704185963
+    }
+  ]
+}
