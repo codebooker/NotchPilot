@@ -176,6 +176,7 @@ import Foundation
         precondition(VoiceCheck.wordErrorRate("Open Safari","open safari.")==0)
         precondition(abs(VoiceCheck.wordErrorRate("a little boy rode his purple bike","A little boy rode his bike.")-1.0/7)<0.001,"One missing word of seven")
         precondition(VoiceCheck.wordErrorRate("select previous word","")==1)
+        precondition(VoiceCheck.wordErrorRate("Click seven","Click 7.")==0,"Digits and number words are the same word")
         precondition(VoiceCheck.understood(VoiceCheck.Phrase("Click seven",dictation:false),heard:"Click 7."),"Commands count when they mean the same command")
         precondition(!VoiceCheck.understood(VoiceCheck.Phrase("Replace purple with blue",dictation:false),heard:"Replace purple with glue."))
         precondition(VoiceCheck.understood(VoiceCheck.Phrase("It had flames on it.",dictation:true),heard:"It had flames on it."))

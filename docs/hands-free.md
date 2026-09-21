@@ -67,7 +67,9 @@ While dictating, a sentence that only *resembles* a command is typed as text, as
 
 Say **voice check**, or choose **Settings → Everyday → Voice check → Start**. NotchPilot shows 12 short phrases, one at a time: seven commands, three dictation sentences, and two corrections. Read each aloud and pause. While the check runs, nothing you say is acted on; each phrase is scored instead. Say **try again** after a stumble, **skip** to move on, or **stop voice check** to finish early.
 
-A command counts as understood when it would run the same command (“Click 7.” for “Click seven”); dictation must match word for word. The results show how many phrases were understood, the share of misheard words, recognition time after your pause, and your speaking level. Phrase levels also set the baseline for **Ignore quieter voices**. Results are saved as text, without audio, in `.cache/voice-checks/` in the runtime folder, so a developer can compare real speech across changes. Run it somewhere quiet: other voices in the room are heard too.
+A command counts as understood when it would run the same command (“Click 7.” for “Click seven”); dictation must match word for word. The results show how many phrases were understood, the share of misheard words, recognition time after your pause, and your speaking level. Phrase levels also set the baseline for **Ignore quieter voices**, which is remembered across launches. Digits and number words score as the same word (“Click 7.” for “Click seven”).
+
+First real run (one speaker, quiet room, built-in microphone, 1-second pause): 12 of 12 understood, all three dictation sentences word for word, recognition about 0.08 s after the pause, speaking level about −32 dBFS. One person in one room; it says nothing yet about accents, speech differences, or noise. Results are saved as text, without audio, in `.cache/voice-checks/` in the runtime folder, so a developer can compare real speech across changes. Run it somewhere quiet: other voices in the room are heard too.
 
 ## Pointing without a mouse
 

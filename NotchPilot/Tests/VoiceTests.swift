@@ -75,6 +75,8 @@ import AVFoundation
         for level in [-20.0,-22,-18] { precondition(gate.accepts(level)) }
         precondition(!gate.accepts(-38),"A voice far quieter than yours is ignored")
         precondition(gate.accepts(-28),"Speaking a little more softly is still you")
+        var restored=VoiceLevelGate(levels:gate.levels)
+        precondition(!restored.accepts(-38),"A saved baseline works right after launch")
         var dictation=VoiceCommandQueue()
         precondition(dictation.enqueue("Replace missing with text")); precondition(dictation.enqueue("Next sentence."))
         _=dictation.next(); dictation.skipActive()

@@ -257,7 +257,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var autoCloseGeneration = UUID()
     let preferencesDraft = PreferencesDraft()
     var qaInbox: QAInbox?
-    var levelGate = VoiceLevelGate()
+    /// Remembered across launches, so "ignore quieter voices" knows your level from the start.
+    var levelGate = VoiceLevelGate(levels:UserDefaults.standard.array(forKey:"voiceLevels") as? [Double] ?? [])
     var pointing: Pointing?
     let speechOutput = SpeechOutput()
     var voiceCheckWindow: NSWindow?
@@ -582,10 +583,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                     DispatchQueue.main.async {
                         guard let self, self.voiceGeneration == token, self.audioEpoch == epoch else { try? FileManager.default.removeItem(at:url); return }
                         self.segmentInfo[url]=(Date(),level)
+                        let known=self.levelGate.levels.count
                         if let level, !self.levelGate.accepts(level), self.state.ignoreQuieterVoices, self.state.voiceCheck?.finished != false {
                             try? FileManager.default.removeItem(at:url)
                             self.state.detail="Ignored a quieter voice. Speak as you usually do, or turn this off in Settings."; return
                         }
+                        if self.levelGate.levels.count != known || known==20 { UserDefaults.standard.set(self.levelGate.levels,forKey:"voiceLevels") }
                         guard self.audioQueue.count < 8 else { try? FileManager.default.removeItem(at:url); self.fail("Speech queue is full. Please let the current instructions finish."); return }
                         self.audioQueue.append(url); self.transcribeNext()
                     }

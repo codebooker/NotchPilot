@@ -66,7 +66,12 @@ struct VoiceCheck {
                        medianSeconds:Self.median(attempted.compactMap(\.seconds)),medianLevel:Self.median(attempted.compactMap(\.level)))
     }
 
-    static func words(_ text: String) -> [String] { VoiceCommandQueue.normalized(text).split(separator:" ").map(String.init) }
+    /// Normalized words for scoring; number words become digits, so "Click 7." matches "Click seven".
+    static func words(_ text: String) -> [String] {
+        VoiceCommandQueue.normalized(text).split(separator:" ").map { word in
+            VoiceEditCommand.number([String(word)],homophones:false).map(String.init) ?? String(word)
+        }
+    }
     /// Word-level edit distance divided by the expected word count.
     static func wordErrorRate(_ expected: String, _ heard: String) -> Double {
         let a=words(expected),b=words(heard)
