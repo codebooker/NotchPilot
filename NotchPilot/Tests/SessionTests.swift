@@ -209,6 +209,21 @@ import Foundation
             precondition(!SpeechText.completesEarly(phrase,overlay:false),"Might continue: "+phrase)
         }
         precondition(SpeechText.completesEarly("5",overlay:true) && SpeechText.completesEarly("Go back.",overlay:true),"Numbers are complete while an overlay shows")
+        // Decision models: default first, priced so Settings can compare them.
+        precondition(ControllerModels.options.first?.id=="openai/gpt-5-mini" && ControllerModels.options.count==4)
+        precondition(ControllerModels.options.dropFirst().allSatisfy { $0.task<ControllerModels.options[0].task },"Every alternative is cheaper per task than the default")
+        precondition(ControllerModels.label("google/gemini-2.5-flash-lite")=="Gemini 2.5 Flash-Lite · about $0.0006 a task · fastest")
+        let savedModel=owner.state.controllerModel
+        owner.state.controllerModel="deepseek/deepseek-v4-flash"
+        owner.runtime=Runtime(root:"/tmp",python:"/usr/bin/true",worker:"worker.py",whisper:"",model:"",vad:"",vadModel:"",planner:"",qwen:"",downloader:"")
+        let launch=owner.workerLaunch()!
+        precondition(launch.arguments.contains("--model") && launch.arguments.contains("deepseek/deepseek-v4-flash") && !launch.arguments.contains("--warm"))
+        owner.state.controllerModel="someone/unknown"
+        precondition(owner.workerLaunch()!.arguments.contains("openai/gpt-5-mini"),"An unknown saved model falls back to the default")
+        owner.state.controllerModel=savedModel;owner.runtime=nil
+        var timing=RequestTiming()
+        timing.mark("host.interpret")
+        precondition(timing.rows.count==1 && timing.rows[0]["run"] as? String==timing.run && timing.rows[0]["metric"] as? String=="host.interpret")
         precondition(QAInbox(arguments:["NotchPilot"])==nil,"QA automation is off unless explicitly launched with --qa-inbox")
         let inboxDirectory=FileManager.default.temporaryDirectory.appendingPathComponent("qa-"+UUID().uuidString)
         try FileManager.default.createDirectory(at:inboxDirectory,withIntermediateDirectories:true)

@@ -10,6 +10,7 @@ import plistlib
 import re
 import signal
 import time
+import contextlib
 import uuid
 from decimal import Decimal
 from pathlib import Path
@@ -19,6 +20,11 @@ from dotenv import load_dotenv
 from dictation import dictated_text
 
 MODEL='openai/gpt-5-mini'
+# Decision models offered in Settings, all with structured outputs on OpenRouter, and how each is
+# routed. Cheaper choices go to the cheapest provider, except DeepSeek V4 Flash, whose cheapest
+# provider took 12-15 s per decision (2026-09-21), so it uses the fastest.
+MODELS={'openai/gpt-5-mini':'latency','deepseek/deepseek-v4-flash':'latency',
+        'google/gemini-2.5-flash-lite':'price','openai/gpt-5-nano':'price'}
 REASONING='low'
 MAX_STAGE_STEPS=24
 MAX_TASK_STEPS=72
@@ -451,7 +457,11 @@ def cursor_point(element,snapshot):
     return None,None
 
 
-async def run(root,goal,emit,handshake,preview=False,allow_writer=False,context=None,target=None):
+async def run(root,goal,emit,handshake,preview=False,allow_writer=False,context=None,target=None,driver=None,run_id=None,model=None):
+    """`driver` may be started in advance by a warm worker, which then closes it; `run_id` comes
+    from the host so its timings join these."""
+    model=model or MODEL
+    if model not in MODELS:raise RuntimeError('That decision model is not offered. Choose one in Settings.')
     from worker import apps
     load_dotenv(root/'.env',override=True)
     key=os.environ.get('NOTCHPILOT_OPENROUTER_API_KEY') or os.environ.get('OPENROUTER_API_KEY')
@@ -460,14 +470,14 @@ async def run(root,goal,emit,handshake,preview=False,allow_writer=False,context=
     task=asyncio.current_task();loop=asyncio.get_running_loop()
     loop.add_signal_handler(signal.SIGTERM,task.cancel)
     cost=0.0;started=time.monotonic();history=[];repetitions={};snapshot={};pid=None;window_id=None;windows=[];observed_after_action=False
-    timings=[];run_id=uuid.uuid4().hex;pending=[];surface=None;succeeded=False;observed_apps={};created_documents=set()
+    timings=[];run_id=run_id or uuid.uuid4().hex;pending=[];surface=None;succeeded=False;observed_apps={};created_documents=set()
     stages=command_steps(goal);stage=0;stage_steps=0;stage_started=False;arithmetic=None;calculation_entered=False;last_typed_field=None;dictation_inserted=False
     def metric(name,seconds,**details):
         timings.append({'run':run_id,'metric':name,'seconds':round(seconds,4),**details})
     review_wait=0.0
-    backend=Driver();backend.metric=metric
+    owned=driver is None;backend=driver or Driver();backend.metric=metric
     try:
-        async with backend as driver,httpx.AsyncClient(timeout=45) as client:
+        async with (backend if owned else contextlib.nullcontext(backend)) as driver,httpx.AsyncClient(timeout=45) as client:
             metric('startup',time.monotonic()-started)
             emit('status',text='Connecting to your Mac through Cua')
             perms=await driver.call('check_permissions')
@@ -538,13 +548,13 @@ async def run(root,goal,emit,handshake,preview=False,allow_writer=False,context=
                     if cost+reserved>0.25:raise RuntimeError('The task reached its API budget. No further action was taken.')
                     decision_started=time.perf_counter()
                     response=await client.post('https://openrouter.ai/api/v1/chat/completions',headers={'Authorization':'Bearer '+key},json={
-                        'model':MODEL,'max_completion_tokens':2500,'reasoning':{'effort':REASONING},
-                        'provider':{'sort':'latency'},
+                        'model':model,'max_completion_tokens':2500,'reasoning':{'effort':REASONING},
+                        'provider':{'sort':MODELS[model],'require_parameters':True},
                         'messages':[{'role':'system','content':system},{'role':'user','content':json.dumps(state,separators=(',',':'))}],
                         'response_format':{'type':'json_schema','json_schema':{'name':'next_action','strict':True,'schema':SCHEMA}}})
                     if response.status_code!=200:raise RuntimeError(f'The Cua controller’s model service returned HTTP {response.status_code}. Check your connection in Setup.')
                     body=response.json();usage=body.get('usage',{});cost+=float(usage['cost']) if usage.get('cost') is not None else reserved
-                    metric('model',time.perf_counter()-decision_started,model=MODEL,reasoning=REASONING,step=step+1,
+                    metric('model',time.perf_counter()-decision_started,model=model,reasoning=REASONING,step=step+1,
                            input_tokens=usage.get('prompt_tokens'),output_tokens=usage.get('completion_tokens'))
                     emit('status',text='Checking the next step',cost=cost)
                     choice=restore_tokens(parse_decision(body),ids)

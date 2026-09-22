@@ -60,6 +60,12 @@ The cursor is a native click-through overlay: an approximately 26 × 28 point ro
 | Jev, experimental | OpenRouter | `~typesafe/jev-latest` |
 | Optional composition | OpenRouter | GPT-5 mini |
 
+**Decision model** (Settings → Advanced, Cua only) chooses what the Cua controller asks. Measured on a short two-decision Calculator task: GPT-5 mini (default, fastest provider) about $0.0019 and 10.1 s; Gemini 2.5 Flash-Lite (cheapest provider) about $0.0006 and 6.4 s; GPT-5 nano (cheapest provider) about $0.0004 and 13.9 s; DeepSeek V4 Flash about $0.0009 and 8.8 s. DeepSeek uses its fastest provider because the cheapest one took 12–15 s per decision. One run each, so these are price and speed measurements, not accuracy evidence ([results](../NotchPilot/experiments/results/decision-models.json)). Requests require providers that honor the output schema.
+
+Each decision sends a compact view of the window: containers and the system-wide Services submenu are dropped, default flags are omitted, and long element tokens become short ids mapped back afterwards. The fixed instructions, installed apps, and key names come first so providers can cache them. On a real Calculator window this halved the input tokens per decision (about 5,000 to 2,600).
+
+A warm worker is started after permissions are confirmed and after each task: the Python worker starts the Cua driver and waits for a request, so the next task starts in about 0.01 s. It is adopted only if its arguments and keys still match current settings; otherwise it is replaced. The app logs its own stage timings (interpretation, worker start, first event, total) into the same local performance log, under the worker's run id.
+
 The chosen provider does not silently fall back to another. Keys saved in Keychain take precedence over project `.env` keys. The host passes credentials through the helper environment, never command-line arguments or the app bundle. Qwen is an interpreter, not the optional online writer.
 
 ## Data and diagnostics

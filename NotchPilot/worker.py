@@ -505,11 +505,55 @@ def run(root,goal,preview=False,provider='openrouter',allow_writer=False,context
     finally:api.client.close()
 
 
+def read_request():
+    """Goal goes over stdin, not command-line arguments or persistent logs."""
+    request=json.loads(sys.stdin.readline());goal=request.get('goal','').strip()
+    context=request.get('context',[])
+    authorization=request.get('authorization',goal)
+    if not isinstance(authorization,str) or len(authorization)>16000:raise RuntimeError('Invalid original request.')
+    if not isinstance(context,list) or any(not isinstance(v,str) or len(v)>8000 for v in context) or len(context)>6:
+        raise RuntimeError('Invalid session context.')
+    if not goal or len(goal)>8000:raise RuntimeError('Enter a command between 1 and 8000 characters.')
+    return request,goal,context,authorization
+
+
+async def run_cua_request(args,request,goal,context,authorization,driver=None):
+    import asyncio
+    from cua_agent import run as run_cua
+    folder=literal_folder_request(authorization)
+    if folder:
+        await asyncio.to_thread(run_literal_folder,args.root,folder,args.preview);return
+    browser_chain=literal_browser_chain(authorization)
+    if browser_chain:
+        await asyncio.to_thread(run_literal_browser_chain,args.root,browser_chain,args.preview);return
+    # Keep the original words and clarification answers available to the controller.
+    await run_cua(args.root,goal+'\nOriginal request: '+authorization,emit,handshake,args.preview,args.allow_writer,context,
+                  target=request.get('target'),driver=driver,run_id=request.get('run_id'),model=args.model)
+
+
+async def warm_cua(args):
+    """A spare worker: the Cua driver starts before the request arrives. If it cannot start
+    here, the task starts it again and reports the problem there."""
+    import asyncio
+    from cua_agent import Driver
+    driver=None
+    try:driver=await Driver().__aenter__()
+    except Exception:driver=None
+    try:
+        request,goal,context,authorization=await asyncio.to_thread(read_request)
+        await asyncio.to_thread(handshake,'checkpoint')
+        await run_cua_request(args,request,goal,context,authorization,driver)
+    finally:
+        if driver:await driver.__aexit__(None,None,None)
+
+
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--root',type=Path,required=True);parser.add_argument('--preview',action='store_true')
     parser.add_argument('--engine',choices=['cua','jev'],default='cua')
     parser.add_argument('--provider',choices=['typesafe','openrouter'],default='openrouter')
     parser.add_argument('--allow-writer',action='store_true')
+    parser.add_argument('--model',default=None)
+    parser.add_argument('--warm',action='store_true')
     parser.add_argument('--permissions',action='store_true')
     parser.add_argument('--request-permissions',action='store_true')
     args=parser.parse_args()
@@ -521,28 +565,13 @@ def main():
             if not Quartz.CGPreflightScreenCaptureAccess():Quartz.CGRequestScreenCaptureAccess()
         print(json.dumps(dict(accessibility=bool(AS.AXIsProcessTrusted()),screen=bool(Quartz.CGPreflightScreenCaptureAccess()))),flush=True)
         return
-    # Goal goes over stdin, not command-line arguments or persistent logs.
-    request=json.loads(sys.stdin.readline());goal=request.get('goal','').strip()
-    context=request.get('context',[])
-    authorization=request.get('authorization',goal)
-    if not isinstance(authorization,str) or len(authorization)>16000:raise RuntimeError('Invalid original request.')
-    if not isinstance(context,list) or any(not isinstance(v,str) or len(v)>8000 for v in context) or len(context)>6:
-        raise RuntimeError('Invalid session context.')
-    if not goal or len(goal)>8000:raise RuntimeError('Enter a command between 1 and 8000 characters.')
+    import asyncio
+    if args.engine=='cua' and args.warm:
+        asyncio.run(warm_cua(args));return
+    request,goal,context,authorization=read_request()
     handshake('checkpoint')
-    if args.engine=='cua':
-        folder=literal_folder_request(authorization)
-        if folder:
-            run_literal_folder(args.root,folder,args.preview);return
-        browser_chain=literal_browser_chain(authorization)
-        if browser_chain:
-            run_literal_browser_chain(args.root,browser_chain,args.preview);return
-        import asyncio
-        from cua_agent import run as run_cua
-        # Keep the original words and clarification answers available to the controller.
-        asyncio.run(run_cua(args.root,goal+'\nOriginal request: '+authorization,emit,handshake,args.preview,args.allow_writer,context,target=request.get('target')))
-    else:
-        run(args.root,goal,args.preview,args.provider,args.allow_writer,context,authorization,request.get('flight'))
+    if args.engine=='cua':asyncio.run(run_cua_request(args,request,goal,context,authorization))
+    else:run(args.root,goal,args.preview,args.provider,args.allow_writer,context,authorization,request.get('flight'))
 
 
 if __name__=='__main__':

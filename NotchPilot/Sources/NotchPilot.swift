@@ -72,6 +72,9 @@ final class PilotState: ObservableObject {
         didSet { UserDefaults.standard.set(localInterpreter,forKey:"localInterpreter") }
     }
     @Published var dictating = false
+    @Published var controllerModel = ControllerModels.valid(UserDefaults.standard.string(forKey:"controllerModel") ?? ControllerModels.defaultID) {
+        didSet { UserDefaults.standard.set(controllerModel,forKey:"controllerModel") }
+    }
     @Published var earlyCommands = UserDefaults.standard.object(forKey:"earlyCommands") as? Bool ?? true {
         didSet { UserDefaults.standard.set(earlyCommands,forKey:"earlyCommands"); changeEarlyCommands?(earlyCommands) }
     }
@@ -262,6 +265,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let preferencesDraft = PreferencesDraft()
     var qaInbox: QAInbox?
     /// Remembered across launches, so "ignore quieter voices" knows your level from the start.
+    var spare: SpareWorker?
+    var requestTiming: RequestTiming?
+    var firstWorkerEvent = false
     var levelGate = VoiceLevelGate(levels:UserDefaults.standard.array(forKey:"voiceLevels") as? [Double] ?? [])
     var pointing: Pointing?
     let speechOutput = SpeechOutput()
@@ -360,7 +366,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             if CommandLine.arguments.contains("--qa-listen") { DispatchQueue.main.asyncAfter(deadline:.now()+0.4) { [weak self] in self?.openVoice() } }
         } else if CommandLine.arguments.contains("--render-settings") {
             showSettings()
-            state.settingsPage=CommandLine.arguments.contains("--preview-setup") ? "Setup" : "Everyday"
+            state.settingsPage=CommandLine.arguments.contains("--preview-setup") ? "Setup" : CommandLine.arguments.contains("--preview-advanced") ? "Advanced" : "Everyday"
             DispatchQueue.main.asyncAfter(deadline: .now()+0.7) { [weak self] in self?.renderPreview(settings:true) }
         } else if CommandLine.arguments.contains("--render-voice-check") {
             var sample=VoiceCheck()
@@ -562,6 +568,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 }
                 self.refreshPermissions()
                 if self.helperReady && self.pendingVoiceStart { self.openVoice() }
+                if self.helperReady { self.prepareSpareWorker() }
                 if self.permissionRequestPending {
                     self.permissionRequestPending=false
                     if !self.helperReady { self.checkHelperPermissions(request:true) }
@@ -741,6 +748,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         autoCloseGeneration=UUID()
         state.waitingRequests=commands.pending; state.command=goal
         originalGoal=goal; dialogue=[]; resolvedGoal=""; flightPlan=nil; state.interpreted=""
+        requestTiming=RequestTiming()
         if handleLocalVoiceCommand(goal) { return }
         interpretCommand()
     }
@@ -757,8 +765,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         targetApp?.activate(options:[]); showPanel(key:false)
         DispatchQueue.main.asyncAfter(deadline:.now()+0.15) { [weak self] in
             guard let self, self.generation==token else { return }
+            let interpreting=Date()
             self.planner.interpret(runtime:runtime,goal:self.originalGoal,context:self.commands.context,dialogue:self.dialogue) { [weak self] plan in
                 guard let self, self.generation==token else { return }
+                self.requestTiming?.mark("host.interpret",since:interpreting)
                 guard plan["event"] as? String == "plan" else { self.fail(plan["text"] as? String ?? "Local interpretation failed."); return }
                 if plan["action"] as? String == "clarify" {
                     guard self.dialogue.count<3 else { self.fail("Please start again with a more specific instruction."); return }
@@ -793,34 +803,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         acceptInstruction(goal)
     }
     func launchCommand(_ goal: String) {
-        guard let runtime else { fail("Runtime unavailable. Rebuild with build.py."); return }
+        guard runtime != nil else { fail("Runtime unavailable. Rebuild with build.py."); return }
         guard desktopReady else { fail("Complete permission setup, then start listening again."); setupPermissions(); return }
         workerSucceeded=false;state.completedAt = .distantPast
         activityWindow?.resignKey(); activityWindow?.orderOut(nil); targetApp?.activate(options:[])
         state.busy=true; state.step=0; state.cost=0; state.phase="Working"; state.detail="\(state.shortcutLabel) or Escape stops the run."
         let token=UUID(); generation=token
-        let process=Process(); let output=Pipe(); let stdin=Pipe(); input=stdin
-        process.executableURL=URL(fileURLWithPath:runtime.python)
-        var arguments=["-B","-u",runtime.worker,"--root",runtime.root,"--engine",state.engine,"--provider",state.provider]
-        if state.preview { arguments.append("--preview") }
-        if state.writerEnabled { arguments.append("--allow-writer") }
-        process.arguments=arguments
-        var environment=ProcessInfo.processInfo.environment
-        for account in ["TYPESAFE_API_KEY","OPENROUTER_API_KEY"] {
-            if let key=Credentials.read(account) { environment["NOTCHPILOT_"+account]=key }
+        guard let launch=workerLaunch() else { fail("Runtime unavailable. Rebuild with build.py."); return }
+        let worker: SpareWorker
+        if let ready=adoptSpareWorker(for:launch) { worker=ready;requestTiming?.mark("host.warm_worker") }
+        else {
+            do { worker=try startWorker(launch,warm:false) } catch { fail("Could not start the desktop helper."); return }
         }
-        process.environment=environment
-        process.standardInput=stdin; process.standardOutput=output; process.standardError=FileHandle.nullDevice
-        process.currentDirectoryURL=URL(fileURLWithPath:runtime.root); task=process
+        let process=worker.process;let output=worker.output;task=process;input=worker.input;firstWorkerEvent=false
+        requestTiming?.mark("host.before_worker")
         let authorization=originalGoal + dialogue.map { "\nClarification answer: " + ($0["answer"] ?? "") }.joined()
         var request: [String:Any] = ["goal":goal,"context":commands.context,"authorization":authorization]
+        if let run=requestTiming?.run { request["run_id"]=run }
         if let targetApp,let targetWindowID {
             request["target"]=["pid":Int(targetApp.processIdentifier),"window_id":targetWindowID,
                                "app":targetApp.localizedName ?? ""]
         }
         if let flightPlan { request["flight"]=flightPlan }
-        do { try process.run(); let data=try JSONSerialization.data(withJSONObject:request); stdin.fileHandleForWriting.write(data+Data([10])) }
-        catch { fail("Could not start the desktop helper."); return }
+        guard let data=try? JSONSerialization.data(withJSONObject:request) else { fail("Could not start the desktop helper."); return }
+        worker.input.fileHandleForWriting.write(data+Data([10]))
         DispatchQueue.global(qos:.userInitiated).async { [weak self] in
             var buffer=Data()
             while true {
@@ -837,6 +843,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             DispatchQueue.main.async {
                 guard let self, self.generation==token else { return }
                 self.task=nil; self.input=nil; self.hideCursor()
+                if var timing=self.requestTiming { timing.mark("host.total");self.writeTimings(timing);self.requestTiming=nil }
+                DispatchQueue.main.asyncAfter(deadline:.now()+0.5) { [weak self] in self?.prepareSpareWorker() }
                 if self.state.busy { self.fail("The helper exited before reporting a result. Pending instructions stopped."); return }
                 self.commands.finish(success:self.workerSucceeded,resolved:self.resolvedGoal.isEmpty ? nil : self.resolvedGoal)
                 self.state.waitingRequests=self.commands.pending
@@ -850,6 +858,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func receive(_ event: [String:Any], token: UUID) {
         guard generation==token else { return }
+        if !firstWorkerEvent { firstWorkerEvent=true;requestTiming?.mark("host.first_event") }
         if let cost=event["cost"] as? Double { state.cost=cost }
         if let step=event["step"] as? Int { state.step=step }
         switch event["event"] as? String {
@@ -1200,6 +1209,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     @objc func quit() { stop(close:true); NSApp.terminate(nil) }
     func applicationWillTerminate(_ notification: Notification) {
+        discardSpareWorker()
         whisperSession.shutdown()
         vadSession.shutdown()
         stop(close:true); downloadTask?.terminate(); permissionTask?.terminate()

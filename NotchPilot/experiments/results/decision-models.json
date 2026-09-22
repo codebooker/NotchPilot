@@ -1,0 +1,18 @@
+{
+  "date": "2026-09-21",
+  "task": "In Calculator, calculate 12 divided by 4. (model-driven route; Calculator already open)",
+  "note": "One run per configuration on one Mac; controller seconds exclude speech and local interpretation. All runs succeeded. Thin evidence for accuracy; useful for price and speed.",
+  "request_tokens_per_decision": {"before_compact_view": [4931, 5153], "after": [2517, 2699]},
+  "runs": [
+    {"model": "openai/gpt-5-mini", "routing": "latency", "controller_seconds": 10.10, "model_seconds": [4.50, 2.88], "cost_usd": 0.00185},
+    {"model": "google/gemini-2.5-flash-lite", "routing": "latency", "controller_seconds": 6.51, "model_seconds": [2.04, 1.81], "cost_usd": 0.00088},
+    {"model": "google/gemini-2.5-flash-lite", "routing": "price", "controller_seconds": 6.36, "model_seconds": [2.16, 1.51], "cost_usd": 0.00059},
+    {"model": "openai/gpt-5-nano", "routing": "latency", "controller_seconds": 17.33, "model_seconds": [10.58, 3.58], "cost_usd": 0.00067},
+    {"model": "openai/gpt-5-nano", "routing": "price", "controller_seconds": 13.89, "model_seconds": [6.41, 4.78], "cost_usd": 0.00044},
+    {"model": "deepseek/deepseek-v4-flash", "routing": "latency", "controller_seconds": 8.79, "model_seconds": [3.11, 2.99], "cost_usd": 0.00090},
+    {"model": "deepseek/deepseek-v4-flash", "routing": "price", "controller_seconds": 46.09, "model_seconds": [30.19, 12.73], "cost_usd": 0.00028},
+    {"model": "deepseek/deepseek-v4-flash", "routing": "price", "controller_seconds": 43.73, "model_seconds": [12.74, 15.27, 12.51], "cost_usd": 0.00028}
+  ],
+  "chosen_routing": {"openai/gpt-5-mini": "latency", "google/gemini-2.5-flash-lite": "price", "openai/gpt-5-nano": "price", "deepseek/deepseek-v4-flash": "latency"},
+  "warm_worker": "Adopted in every run: the worker's first event arrived about 0.01 s after the request was written."
+}

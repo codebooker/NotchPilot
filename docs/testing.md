@@ -60,6 +60,8 @@ The app itself can render the voice check without a microphone: `NotchPilot.app/
 
 Add `--overlay-preview /tmp/np-overlay` to also write the numbers and grid overlays as `-numbers.png` and `-grid.png`.
 
+`NotchPilot.app/Contents/MacOS/NotchPilot --render-settings [--preview-setup|--preview-advanced] /tmp/settings.png` renders a Settings page.
+
 For a rendered cursor preview:
 
 ```sh

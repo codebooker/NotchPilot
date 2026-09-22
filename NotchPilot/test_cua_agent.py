@@ -1,4 +1,5 @@
 import json
+import re
 import copy
 import asyncio
 import plistlib
@@ -132,6 +133,10 @@ class BatchTests(unittest.TestCase):
         system=cua.system_prompt(['Calculator','Safari'])
         self.assertTrue(system.startswith(cua.INSTRUCTIONS))
         self.assertIn('"Calculator"',system);self.assertIn('select_all',system)
+    def test_settings_offer_exactly_the_worker_models(self):
+        source=''.join(path.read_text() for path in (Path(__file__).resolve().parent/'Sources').glob('*.swift'))
+        block=source[source.index('enum ControllerModels'):];block=block[:block.index('\n}\n')]
+        self.assertEqual(set(re.findall(r'"([a-z0-9-]+/[a-z0-9.-]+)"',block)),set(cua.MODELS))
     def test_numeric_display_changes_are_allowed_only_in_calculator(self):
         s=copy.deepcopy(self.snapshot);s['tree_markdown']='- AXStaticText = "42"'
         self.assertEqual(cua.batch_surface(self.snapshot),cua.batch_surface(s))
@@ -178,7 +183,7 @@ class BatchTests(unittest.TestCase):
 
 
 class ControllerTests(unittest.IsolatedAsyncioTestCase):
-    async def scenario(self,decisions,preview=False,changed_surface=False,interrupt=False,recorded_calls=None,effect=None,new_document=False,goal_override=None,cancel_checkpoint=None,empty_observations=0,target=None,editable=False,framed=False,press_reply='continue'):
+    async def scenario(self,decisions,preview=False,changed_surface=False,interrupt=False,recorded_calls=None,effect=None,new_document=False,goal_override=None,cancel_checkpoint=None,empty_observations=0,target=None,editable=False,framed=False,press_reply='continue',prestarted=False,run_id=None,model=None,log=None):
         calls=[] if recorded_calls is None else recorded_calls;events=[];requests=[];instances=[]
         class Driver:
             revision=0
@@ -223,7 +228,15 @@ class ControllerTests(unittest.IsolatedAsyncioTestCase):
             return 'continue'
         with tempfile.TemporaryDirectory() as directory,patch.dict(os.environ,{'OPENROUTER_API_KEY':'fake'},clear=True),patch.object(cua,'Driver',Driver),patch('worker.apps',return_value={'0':{'name':'Calculator'}}),patch.object(cua.httpx,'AsyncClient',client):
             goal=goal_override or ('Create a new document and type 6' if new_document else 'Click 6 in Calculator')
-            await cua.run(Path(directory),goal,lambda e,**kw:events.append((e,kw)),handshake,preview=preview,target=target)
+            options={}
+            if prestarted:
+                warm=Driver();await warm.__aenter__();options['driver']=warm
+            if run_id:options['run_id']=run_id
+            if model:options['model']=model
+            await cua.run(Path(directory),goal,lambda e,**kw:events.append((e,kw)),handshake,preview=preview,target=target,**options)
+            if log is not None:
+                path=Path(directory)/'.cache/notchpilot-performance.jsonl'
+                log.extend(json.loads(line) for line in path.read_text().splitlines()) if path.exists() else None
         return calls,events,requests
     async def test_fronts_exact_window_and_reobserves_after_click_without_jev(self):
         calls,events,requests=await self.scenario([{'action':'open_app','app':'Calculator'},
@@ -364,6 +377,25 @@ class ControllerTests(unittest.IsolatedAsyncioTestCase):
             {'action':'done','reason':'Calculator shows 6'}])
         self.assertNotIn('host_press',[name for name,_ in events])
         self.assertEqual([name for name,_ in calls].count('click'),1)
+    async def test_prestarted_driver_is_used_and_left_to_its_owner(self):
+        calls,events,_=await self.scenario([{'action':'open_app','app':'Calculator'},{'action':'done','reason':'Calculator is open'}],prestarted=True)
+        self.assertNotIn(('closed',{}),calls,'A warm worker closes its own driver after the task')
+        self.assertIn('launch_app',[name for name,_ in calls])
+    async def test_timings_use_the_host_run_id(self):
+        log=[]
+        await self.scenario([{'action':'open_app','app':'Calculator'},{'action':'done','reason':'Calculator is open'}],run_id='host123',log=log)
+        self.assertTrue(log and all(row['run']=='host123' for row in log))
+    async def test_offered_models_only(self):
+        _,_,requests=await self.scenario([{'action':'open_app','app':'Calculator'},{'action':'done','reason':'Calculator is open'}],model='deepseek/deepseek-v4-flash')
+        self.assertEqual(json.loads(requests[0].content)['model'],'deepseek/deepseek-v4-flash')
+        self.assertEqual(json.loads(requests[0].content)['provider'].get('require_parameters'),True,'Only providers that honor the output schema')
+        self.assertEqual(json.loads(requests[0].content)['provider']['sort'],'latency','DeepSeek\'s cheapest provider took 12-15 s per decision')
+        _,_,requests=await self.scenario([{'action':'open_app','app':'Calculator'},{'action':'done','reason':'Calculator is open'}],model='google/gemini-2.5-flash-lite')
+        self.assertEqual(json.loads(requests[0].content)['provider']['sort'],'price','Other cheap choices use the cheapest provider')
+        _,_,requests=await self.scenario([{'action':'open_app','app':'Calculator'},{'action':'done','reason':'Calculator is open'}])
+        self.assertEqual(json.loads(requests[0].content)['provider']['sort'],'latency','The default keeps the fastest provider')
+        with self.assertRaisesRegex(RuntimeError,'not offered'):
+            await self.scenario([{'action':'done','reason':'x'}],model='someone/expensive-model')
     async def test_preview_does_not_launch_or_click(self):
         calls,events,_=await self.scenario([{'action':'open_app','app':'Calculator'}],preview=True)
         self.assertNotIn('launch_app',[name for name,_ in calls])

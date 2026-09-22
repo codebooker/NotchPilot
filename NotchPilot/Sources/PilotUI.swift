@@ -436,7 +436,14 @@ struct PreferencesView: View {
             PilotCard(title:"Control engine",subtitle:"Cua targets native app windows. Jev remains available for comparison.") {
                 Picker("Engine",selection:$state.engine) { Text("Cua").tag("cua");Text("Jev · experimental").tag("jev") }.pickerStyle(.segmented).tint(PilotStyle.accent)
                     .disabled(state.busy || state.recording).onChange(of:state.engine) { state.refreshConnection?() }
-                Text("Cua uses GPT-5 mini through OpenRouter to choose actions from native controls. It does not call Jev or enable browser debugging.").font(.system(size:12)).foregroundStyle(PilotStyle.secondary)
+                Text("Cua uses an OpenRouter model to choose actions from native controls. It does not call Jev or enable browser debugging.").font(.system(size:12)).foregroundStyle(PilotStyle.secondary)
+                if state.engine == "cua" {
+                    Picker("Decision model",selection:$state.controllerModel) {
+                        ForEach(ControllerModels.options,id:\.id) { option in Text(ControllerModels.label(option.id)).tag(option.id) }
+                    }.disabled(state.busy)
+                    Text("Your OpenRouter key pays for these. Costs are for a short task; longer tasks take more steps. Cheaper models may pick the wrong control more often. NotchPilot still checks the window after every step.")
+                        .font(.system(size:12)).foregroundStyle(PilotStyle.secondary)
+                }
             }
             PilotCard(title:"Understanding & writing",subtitle:"These options affect how requests are interpreted and carried out.") {
                 Toggle("Understand casual requests",isOn:$state.localInterpreter).disabled(state.busy || state.recording || !state.question.isEmpty)
