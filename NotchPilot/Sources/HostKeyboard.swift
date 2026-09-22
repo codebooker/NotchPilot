@@ -32,8 +32,9 @@ enum HostKeyboard {
         }
         return matches.count==1 ? matches[0] : nil
     }
+    /// Searches up to 1,500 elements: a loaded web page easily exceeds 300 before the address bar.
     static func focus(_ spec: [String:Any], pid: pid_t) -> Bool {
-        guard let element=observed(spec,pid:pid,roles:["AXTextArea","AXTextField","AXComboBox"],limit:300),
+        guard let element=observed(spec,pid:pid,roles:["AXTextArea","AXTextField","AXComboBox"],limit:1500),
               AXUIElementSetAttributeValue(element,kAXFocusedAttribute as CFString,kCFBooleanTrue) == .success,
               let focused=attribute(AXUIElementCreateApplication(pid),kAXFocusedUIElementAttribute) else { return false }
         return CFEqual(focused,element)
@@ -44,6 +45,42 @@ enum HostKeyboard {
         guard let element=observed(spec,pid:pid,roles:["AXButton","AXCheckBox","AXRadioButton","AXDisclosureTriangle"],limit:1500),
               attribute(element,kAXEnabledAttribute) as? Bool != false else { return false }
         return AXUIElementPerformAction(element,kAXPressAction as CFString) == .success
+    }
+
+    static func center(_ spec: [String:Any]) -> CGPoint? {
+        guard let frame=spec["frame"] as? [String:Double],let x=frame["x"],let y=frame["y"],let w=frame["w"],let h=frame["h"],w>0,h>0 else { return nil }
+        return CGPoint(x:x+w/2,y:y+h/2)
+    }
+    /// Global bounds of an on-screen window, for keeping a focusing click inside it.
+    static func windowBounds(_ window: Int) -> CGRect? {
+        guard window>0,let rows=CGWindowListCopyWindowInfo([.optionIncludingWindow],CGWindowID(window)) as? [[String:Any]],
+              let bounds=rows.first?[kCGWindowBounds as String] as? NSDictionary,
+              let rect=CGRect(dictionaryRepresentation:bounds as CFDictionary) else { return nil }
+        return rect
+    }
+    enum Keystroke: Equatable { case unicode(String), key(CGKeyCode) }
+    static func keystrokes(_ text: String) -> [Keystroke] {
+        text.map { $0 == "\n" ? .key(36) : $0 == "\t" ? .key(48) : .unicode(String($0)) }
+    }
+    /// Real key events, which Chromium treats as user typing. Its address bar shows text inserted
+    /// through Accessibility but ignores it, so Return would do nothing. `keep` is checked before
+    /// each keystroke so cancellation stops typing.
+    static func type(_ text: String, keep: () -> Bool) -> Bool {
+        for stroke in keystrokes(text) {
+            guard keep() else { return false }
+            for down in [true,false] {
+                switch stroke {
+                case .key(let code): CGEvent(keyboardEventSource:nil,virtualKey:code,keyDown:down)?.post(tap:.cghidEventTap)
+                case .unicode(let character):
+                    guard let event=CGEvent(keyboardEventSource:nil,virtualKey:0,keyDown:down) else { return false }
+                    var units=Array(character.utf16);event.flags=[]
+                    event.keyboardSetUnicodeString(stringLength:units.count,unicodeString:&units)
+                    event.post(tap:.cghidEventTap)
+                }
+            }
+            usleep(6000)
+        }
+        return true
     }
 
     static func windowIsFront(_ expected: Int, pid: pid_t, bundle: String?) -> Bool {

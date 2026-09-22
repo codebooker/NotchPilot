@@ -268,6 +268,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var spare: SpareWorker?
     var requestTiming: RequestTiming?
     var firstWorkerEvent = false
+    /// Developer detail for QA status when host input is refused.
+    var hostDiagnostic = ""
     var levelGate = VoiceLevelGate(levels:UserDefaults.standard.array(forKey:"voiceLevels") as? [Double] ?? [])
     var pointing: Pointing?
     let speechOutput = SpeechOutput()
@@ -931,6 +933,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 voiceEditor.record(try HostKeyboard.insertText(text,spec:field,pid:front.processIdentifier,window:window,spacing:event["spacing"] as? Bool == true))
                 ack(token)
             } catch { fail(error.localizedDescription) }
+        case "host_type":
+            guard let pid=event["pid"] as? Int,let window=event["window_id"] as? Int,let text=event["text"] as? String,
+                  !text.isEmpty,text.count<=4000,let focus=event["focus"] as? [String:Any],
+                  let front=NSWorkspace.shared.frontmostApplication,Int(front.processIdentifier)==pid,
+                  HostKeyboard.windowIsFront(window,pid:front.processIdentifier,bundle:front.bundleIdentifier) else {
+                fail("The target window changed before typing. Nothing was typed.");return
+            }
+            // Accessibility focus works for native fields and the browser's own address bar. A field
+            // inside a web page needs real renderer focus, so click it, but only inside this window.
+            var clickToFocus: CGPoint?
+            if !HostKeyboard.focus(focus,pid:front.processIdentifier) {
+                guard let point=HostKeyboard.center(focus),HostKeyboard.windowBounds(window)?.contains(point)==true else {
+                    hostDiagnostic="host_type focus: spec=\(focus) center=\(String(describing:HostKeyboard.center(focus))) window=\(window) bounds=\(String(describing:HostKeyboard.windowBounds(window)))"
+                    fail("Could not focus the requested text field. Nothing was typed.");return
+                }
+                clickToFocus=point
+            }
+            let frontPID=front.processIdentifier
+            let replace=event["replace"] as? Bool == true,submit=event["submit"] as? Bool == true
+            DispatchQueue.global(qos:.userInitiated).async { [weak self] in
+                // An address bar is replaced, not appended to. Stop between keystrokes if the task is
+                // cancelled or another app comes forward.
+                if let clickToFocus { PointerInput.click(.click,at:clickToFocus);usleep(150000) }
+                if replace { SaveRecovery.key(0,flags:.maskCommand);usleep(20000) }
+                let finished=HostKeyboard.type(text) {
+                    DispatchQueue.main.sync { self?.generation==token && NSWorkspace.shared.frontmostApplication?.processIdentifier==frontPID }
+                }
+                usleep(80000) // Let the app process the last keystrokes before reading the field back.
+                DispatchQueue.main.async {
+                    guard let self,self.generation==token else { return }
+                    guard finished else { self.fail("Typing stopped because the window changed. Check the field before continuing.");return }
+                    let app=AXUIElementCreateApplication(frontPID)
+                    let focused=HostKeyboard.attribute(app,kAXFocusedUIElementAttribute).flatMap { raw in
+                        CFGetTypeID(raw)==AXUIElementGetTypeID() ? HostKeyboard.attribute(raw as! AXUIElement,kAXValueAttribute) as? String : nil
+                    }
+                    let verified=focused?.localizedCaseInsensitiveContains(text) == true
+                    if submit { SaveRecovery.key(36) }
+                    self.reply(verified ? "continue" : "unverified",token:token)
+                }
+            }
         case "host_press":
             // Only the exact observed control in the front window; anything else goes back to Cua.
             guard let pid=event["pid"] as? Int,let window=event["window_id"] as? Int,let spec=event["press"] as? [String:Any],
@@ -989,6 +1031,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
              case nil: return ""
              }
          }(),
+         "host_diagnostic":hostDiagnostic,"question":state.question,"context":commands.context,
          "pending":commands.pending.count,"completedAt":state.completedAt.timeIntervalSince1970]
     }
     func ack(_ token: UUID) { reply("continue",token:token) }

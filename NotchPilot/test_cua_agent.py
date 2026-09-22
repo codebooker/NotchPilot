@@ -123,6 +123,39 @@ class BatchTests(unittest.TestCase):
             {'element_token':'5','role':'AXMenuItem','label':'Scientific','selected':True}])
         self.assertEqual(view['visible_text'],['- AXStaticText = "42"'])
         self.assertEqual(ids,{'1':'s9:1','2':'s9:2','3':'s9:3','5':'s9:5'})
+    def test_model_view_drops_text_that_repeats_its_control(self):
+        rows=[{'element_token':'s:11','element_index':11,'role':'AXWebArea','label':'YouTube'},
+              {'element_token':'s:26','element_index':26,'role':'AXLink','label':'Home','parent_index':11},
+              {'element_token':'s:27','element_index':27,'role':'AXLink','label':'Home','parent_index':26},
+              {'element_token':'s:28','element_index':28,'role':'AXStaticText','value':'Home','parent_index':27},
+              {'element_token':'s:29','element_index':29,'role':'AXStaticText','value':'Cute dogs compilation','parent_index':11}]
+        view,_=cua.model_view({'app_name':'Google Chrome','window_title':'YouTube','elements':rows,'tree_markdown':''})
+        self.assertEqual([c['element_token'] for c in view['controls']],['11','26','29'],'Nested copies go; page text stays')
+    def test_model_view_hides_controls_outside_the_window(self):
+        # Chrome exposed an off-screen "_SC_SEARCH_FIELD" below the window; both models chose it.
+        rows=[{'element_token':'s:1','element_index':1,'role':'AXTextArea','value':'Search or ask a question','frame':{'x':500,'y':100,'w':400,'h':30}},
+              {'element_token':'s:2','element_index':2,'role':'AXTextField','label':'_SC_SEARCH_FIELD','frame':{'x':-1,'y':931,'w':342,'h':26}},
+              {'element_token':'s:3','element_index':3,'role':'AXMenuItem','label':'Find'}]
+        view,ids=cua.model_view({'app_name':'Google Chrome','window_title':'YouTube','elements':rows,'tree_markdown':''},
+                                bounds={'x':0,'y':33,'width':1470,'height':859})
+        self.assertEqual([c['element_token'] for c in view['controls']],['1','3'],'Menu items have no frame and stay')
+        self.assertNotIn('2',ids)
+    def test_typed_text_must_be_the_users_own_words(self):
+        goal='Go to youtube.com and find me a video about dogs.'
+        for text in ('youtube.com','dogs','dog video','Dogs video','video about dogs'):self.assertTrue(cua.own_words(text,goal),text)
+        for text in ('youtube.com/results?search_query=dogs','Dear team, dogs are great','cats'):self.assertFalse(cua.own_words(text,goal),text)
+    def test_browser_menus_with_history_and_bookmarks_stay_private(self):
+        rows=[{'element_token':'s:1','element_index':1,'role':'AXMenuBarItem','label':'History'},
+              {'element_token':'s:2','element_index':2,'role':'AXMenu','label':'History','parent_index':1},
+              {'element_token':'s:3','element_index':3,'role':'AXMenuItem','label':'My bank statement','parent_index':2},
+              {'element_token':'s:4','element_index':4,'role':'AXMenuBarItem','label':'Bookmarks'},
+              {'element_token':'s:5','element_index':5,'role':'AXMenuItem','label':'Private bookmark','parent_index':4},
+              {'element_token':'s:6','element_index':6,'role':'AXMenuBarItem','label':'File'},
+              {'element_token':'s:7','element_index':7,'role':'AXMenuItem','label':'New Tab','parent_index':6}]
+        view,_=cua.model_view({'app_name':'Google Chrome','window_title':'YouTube','elements':rows,'tree_markdown':''})
+        self.assertEqual([c['label'] for c in view['controls']],['File','New Tab'])
+        view,_=cua.model_view({'app_name':'TextEdit','window_title':'Notes','elements':rows,'tree_markdown':''})
+        self.assertIn('Private bookmark',[c['label'] for c in view['controls']],'Only browser menus are hidden')
     def test_short_ids_map_back_to_snapshot_tokens(self):
         ids={'1':'s9:1','2':'s9:2'}
         choice=cua.restore_tokens({'action':'click','element_token':'1','following_clicks':['2','9']},ids)
@@ -183,7 +216,7 @@ class BatchTests(unittest.TestCase):
 
 
 class ControllerTests(unittest.IsolatedAsyncioTestCase):
-    async def scenario(self,decisions,preview=False,changed_surface=False,interrupt=False,recorded_calls=None,effect=None,new_document=False,goal_override=None,cancel_checkpoint=None,empty_observations=0,target=None,editable=False,framed=False,press_reply='continue',prestarted=False,run_id=None,model=None,log=None):
+    async def scenario(self,decisions,preview=False,changed_surface=False,interrupt=False,recorded_calls=None,effect=None,new_document=False,goal_override=None,cancel_checkpoint=None,empty_observations=0,target=None,editable=False,framed=False,press_reply='continue',prestarted=False,run_id=None,model=None,log=None,app_name='Calculator',titles=None):
         calls=[] if recorded_calls is None else recorded_calls;events=[];requests=[];instances=[]
         class Driver:
             revision=0
@@ -203,7 +236,8 @@ class ControllerTests(unittest.IsolatedAsyncioTestCase):
                     self.revision+=1
                     if self.revision<=empty_observations:
                         return {'app_name':'Calculator','window_title':'Save','elements':[],'tree_markdown':''}
-                    return {'app_name':'Calculator','window_title':'Calculator',
+                    title=titles[min(self.revision-1,len(titles)-1)] if titles else 'Calculator'
+                    return {'app_name':app_name,'window_title':title,'elements_complete':True,
                         'tree_markdown':'- AXStaticText = "Unexpected dialog"' if changed_surface and self.revision>1 else '',
                         'elements':[{'element_token':f's{self.revision}','label':'6','role':'AXTextArea' if new_document or editable else 'AXButton',
                                      **({'frame':{'x':10,'y':20,'w':48,'h':48},'actions':['AXPress']} if framed else {})},
@@ -226,7 +260,7 @@ class ControllerTests(unittest.IsolatedAsyncioTestCase):
             if event=='host_key' and kw.get('key')=='n':instances[-1].new_window=True
             if event=='host_press':return press_reply
             return 'continue'
-        with tempfile.TemporaryDirectory() as directory,patch.dict(os.environ,{'OPENROUTER_API_KEY':'fake'},clear=True),patch.object(cua,'Driver',Driver),patch('worker.apps',return_value={'0':{'name':'Calculator'}}),patch.object(cua.httpx,'AsyncClient',client):
+        with tempfile.TemporaryDirectory() as directory,patch.dict(os.environ,{'OPENROUTER_API_KEY':'fake'},clear=True),patch.object(cua,'Driver',Driver),patch.object(cua,'PAGE_WAIT',0.05),patch.object(cua,'PAGE_POLL',0.005),patch('worker.apps',return_value={'0':{'name':'Calculator'}}),patch.object(cua.httpx,'AsyncClient',client):
             goal=goal_override or ('Create a new document and type 6' if new_document else 'Click 6 in Calculator')
             options={}
             if prestarted:
@@ -396,6 +430,92 @@ class ControllerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(json.loads(requests[0].content)['provider']['sort'],'latency','The default keeps the fastest provider')
         with self.assertRaisesRegex(RuntimeError,'not offered'):
             await self.scenario([{'action':'done','reason':'x'}],model='someone/expensive-model')
+    async def test_chrome_typing_uses_real_keystrokes_from_the_host(self):
+        # Chrome's address bar shows Accessibility-inserted text but ignores it, so Enter does nothing.
+        calls,events,_=await self.scenario([{'action':'open_app','app':'Calculator'},
+            {'action':'type','element_token':'s1','text':'6','reason':'Type 6'},{'action':'done','reason':'Typed 6'}],
+            editable=True,framed=True,app_name='Google Chrome',goal_override='Search for 6')
+        typed=[fields for event,fields in events if event=='host_type']
+        self.assertEqual(len(typed),1)
+        self.assertEqual((typed[0]['text'],typed[0]['focus']['role']),('6','AXTextArea'))
+        self.assertNotIn('type_text',[name for name,_ in calls])
+    def test_keystroke_requests_replace_the_address_bar_and_submit_on_enter(self):
+        address={'role':'AXTextField','label':'Address and search bar','frame':{'x':1,'y':2,'w':300,'h':30}}
+        self.assertEqual(cua.keystroke_request(address,{'key':'enter'},'youtube.com'),
+            {'text':'youtube.com','focus':{'role':'AXTextField','frame':address['frame']},'replace':True,'submit':True})
+        field={'role':'AXTextField','label':'Search','frame':{'x':1,'y':2,'w':300,'h':30}}
+        self.assertEqual(cua.keystroke_request(field,{'key':''},'dogs')['replace'],False,'Page fields insert at the cursor')
+    async def test_typed_text_reported_as_applied_when_the_host_verifies_it(self):
+        calls,events,requests=await self.scenario([{'action':'open_app','app':'Calculator'},
+            {'action':'type','element_token':'s1','text':'6','key':'enter','reason':'Search 6'},{'action':'done','reason':'Searched'}],
+            editable=True,framed=True,app_name='Google Chrome',goal_override='Search for 6')
+        typed=[fields for event,fields in events if event=='host_type']
+        self.assertTrue(typed[0]['submit'])
+        state=json.loads(json.loads(requests[-1].content)['messages'][1]['content'])
+        self.assertEqual([a['delivery_effect'] for a in state['recent_actions'] if a['completed_action']=='type'],['applied'])
+    async def test_browser_submit_waits_for_the_page_before_the_next_decision(self):
+        # Chrome was still showing "New Tab" when it was observed right after Enter.
+        with patch.object(cua,'PAGE_POLL',0.01):
+            calls,events,requests=await self.scenario([{'action':'open_app','app':'Calculator'},
+                {'action':'type','element_token':'s1','text':'6','key':'enter','reason':'Search 6'},{'action':'done','reason':'Searched'}],
+                editable=True,framed=True,app_name='Google Chrome',goal_override='Search for 6',titles=['New Tab','New Tab','New Tab','New Tab','Results'])
+        state=json.loads(json.loads(requests[-1].content)['messages'][1]['content'])
+        self.assertEqual(state['snapshot']['window'],'Results')
+    async def test_browser_submit_wait_is_bounded(self):
+        with patch.object(cua,'PAGE_POLL',0.01),patch.object(cua,'PAGE_WAIT',0.05):
+            calls,events,requests=await self.scenario([{'action':'open_app','app':'Calculator'},
+                {'action':'type','element_token':'s1','text':'6','key':'enter','reason':'Search 6'},{'action':'done','reason':'Nothing changed'}],
+                editable=True,framed=True,app_name='Google Chrome',goal_override='Search for 6',titles=['New Tab'])
+        self.assertEqual(len(requests),3,'The task continues when the page never changes')
+    async def test_page_wait_needs_a_new_title_and_settled_content(self):
+        # YouTube sets its title before the page content appears in the accessibility tree.
+        page=lambda title,count:{'window_title':title,'elements':[{'element_token':str(i)} for i in range(count)]}
+        sequence=[page('YouTube',3),page('YouTube',40),page('YouTube',66),page('YouTube',66)];seen=[]
+        async def observe():
+            seen.append(1);return sequence[len(seen)-1]
+        with patch.object(cua,'PAGE_POLL',0.001):
+            result=await cua.wait_for_page(observe,'New Tab',page('New Tab',3))
+        self.assertEqual((len(result['elements']),len(seen)),(66,4))
+    async def test_page_wait_needs_the_web_page_itself(self):
+        # The title changed and the count held steady while the page content had not arrived yet.
+        chrome=[{'element_token':str(i),'role':'AXButton'} for i in range(50)]
+        page=[{'element_token':'web','role':'AXWebArea'}]+[{'element_token':'l'+str(i),'role':'AXLink'} for i in range(30)]
+        sequence=[{'window_title':'YouTube','elements':chrome},{'window_title':'YouTube','elements':chrome+page},
+                  {'window_title':'YouTube','elements':chrome+page}];seen=[]
+        async def observe():
+            seen.append(1);return sequence[len(seen)-1]
+        with patch.object(cua,'PAGE_POLL',0.001):
+            result=await cua.wait_for_page(observe,'New Tab',{'window_title':'YouTube','elements':chrome},web=True)
+        self.assertEqual((len(result['elements']),len(seen)),(81,3))
+    async def test_browsers_read_more_of_an_incomplete_page(self):
+        calls=[]
+        class Driver:
+            async def call(self,name,**args):
+                calls.append(args.get('max_elements'))
+                return {'app_name':'Google Chrome','elements_complete':args['max_elements']>220,
+                        'elements':[{'element_token':'a','role':'AXLink','label':'Video'}],'tree_markdown':''}
+        snapshot=await cua.observe_window(Driver(),1,2)
+        self.assertEqual(calls,[220,600]);self.assertTrue(snapshot['elements_complete'])
+    async def test_refused_text_is_feedback_not_the_end_of_the_task(self):
+        calls,events,requests=await self.scenario([{'action':'open_app','app':'Calculator'},
+            {'action':'type','element_token':'s1','text':'composed words','key':'enter','reason':'Compose'},
+            {'action':'type','element_token':'s1','text':'6','key':'enter','reason':'Search 6'},{'action':'done','reason':'Searched'}],
+            editable=True,framed=True,app_name='Google Chrome',goal_override='Search for 6')
+        state=json.loads(json.loads(requests[2].content)['messages'][1]['content'])  # A refusal does not re-observe.
+        self.assertEqual(state['recent_actions'][-1]['host_rejected'],'type')
+        self.assertEqual([fields['text'] for event,fields in events if event=='host_type'],['6'],'Only the user\'s own words were typed')
+    async def test_enter_after_accessibility_typing_in_native_apps(self):
+        calls,events,_=await self.scenario([{'action':'open_app','app':'Calculator'},
+            {'action':'type','element_token':'s1','text':'6','key':'enter','reason':'Search 6'},{'action':'done','reason':'Searched'}],
+            editable=True,goal_override='Search for 6')
+        self.assertEqual([name for name,_ in calls].count('type_text'),1)
+        self.assertEqual([fields.get('key') for event,fields in events if event=='host_key'],['return'])
+    async def test_native_apps_keep_accessibility_typing(self):
+        calls,events,_=await self.scenario([{'action':'open_app','app':'Calculator'},
+            {'action':'type','element_token':'s1','text':'6','reason':'Type 6'},{'action':'done','reason':'Typed 6'}],
+            editable=True,goal_override='Search for 6')
+        self.assertNotIn('host_type',[name for name,_ in events])
+        self.assertEqual([name for name,_ in calls].count('type_text'),1)
     async def test_preview_does_not_launch_or_click(self):
         calls,events,_=await self.scenario([{'action':'open_app','app':'Calculator'}],preview=True)
         self.assertNotIn('launch_app',[name for name,_ in calls])

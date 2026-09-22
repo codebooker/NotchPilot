@@ -41,7 +41,7 @@ def handshake(event,**kwargs):
     """Waits for the host. 'fallback' means the host could not do it; the caller uses its own route."""
     emit(event,**kwargs)
     reply=sys.stdin.readline().strip()
-    if reply not in ('continue','fallback'):
+    if reply not in ('continue','fallback','unverified'):
         raise InterruptedError('Stopped')
     return reply
 

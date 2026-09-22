@@ -457,6 +457,13 @@ import Foundation
         precondition(owner.state.detail==beforeStaleKey,"Cancelled generations must never issue keyboard input")
         owner.receive(["event":"host_key","pid":-1,"key":"return"],token:owner.generation)
         precondition(owner.state.detail.contains("active app changed"),"Host keyboard input must reject a different foreground app")
+        precondition(HostKeyboard.keystrokes("a\nb\tc😀") == [.unicode("a"),.key(36),.unicode("b"),.key(48),.unicode("c"),.unicode("😀")],
+                     "Real keystrokes: Return and Tab keys for line breaks and tabs")
+        precondition(HostKeyboard.center(["role":"AXTextField","frame":["x":10.0,"y":20.0,"w":100.0,"h":30.0]])==CGPoint(x:60,y:35))
+        precondition(HostKeyboard.center(["role":"AXTextField","frame":["x":10.0,"y":20.0,"w":0.0,"h":30.0]])==nil,"No click without a real frame")
+        precondition(HostKeyboard.windowBounds(-1)==nil,"Unknown windows have no bounds to click inside")
+        owner.receive(["event":"host_type","pid":-1,"window_id":1,"text":"youtube.com","focus":["role":"AXTextField","frame":["x":1,"y":1,"w":9,"h":9]]],token:owner.generation)
+        precondition(owner.state.detail.contains("Nothing was typed"),"Host typing must reject a different foreground app")
         precondition(!HostKeyboard.press(["role":"AXButton"],pid:-1),"A host press needs an observed role and frame")
         let beforePress=owner.state.detail
         owner.receive(["event":"host_press","pid":-1,"window_id":1,"press":["role":"AXButton","frame":["x":1,"y":1,"w":9,"h":9]]],token:owner.generation)

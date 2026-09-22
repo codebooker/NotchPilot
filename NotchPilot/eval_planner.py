@@ -12,6 +12,10 @@ CASES=[
     ('explicit_test_file',{'goal':'Open /tmp/notchpilot-test.txt in TextEdit, replace its contents with "alpha beta", and save it.'},{'app':'Finder'},'execute',['/tmp/notchpilot-test.txt','textedit','alpha beta','save']),
     ('chrome_flight',{'goal':'Open a new tab in Google Chrome and find me a flight from Orlando to London Heathrow Airport'},{'app':'Finder'},'clarify',[]),
     ('safari_search',{'goal':'Open a new tab in Safari and search for Swift actor isolation'},{'app':'Finder'},'execute',['new tab','safari','swift actor isolation']),
+    ('video_search',{'goal':'Go to youtube.com and find me a video about dogs','context':['Press command t','Open Google Chrome.']},{'app':'Google Chrome'},'execute',['youtube','dog']),
+    ('open_ended_find',{'goal':'find me a recipe for banana bread'},{'app':'Safari'},'execute',['banana bread']),
+    ('video_search_new_tab',{'goal':'Go to youtube.com and find me a video about dogs.','context':['Press command t','Open Google Chrome.']},
+        {'app':'Google Chrome','window':'New Tab - Google Chrome','document':'chrome://newtab/','focused_role':'AXTextField','selected':[]},'execute',['youtube','dog']),
     ('explicit_ask',{'goal':'open an app, but ask me which one first'},{'app':'ChatGPT'},'clarify',[]),
     ('casual_app',{'goal':'would you mind popping Finder open'}, {'app':'TextEdit'},'execute',['finder']),
     ('downloads',{'goal':"show me the things I've downloaded"},{'app':'Finder'},'execute',['downloads']),
@@ -32,7 +36,8 @@ CASES=[
 
 
 def main():
-    root=Path(__file__).resolve().parents[1];start=time.perf_counter();model=Interpreter(root/'.cache/notch-qwen3-1.7b')
+    from build import runtime_root
+    root=runtime_root();start=time.perf_counter();model=Interpreter(root/'.cache/notch-qwen3-1.7b')
     load=time.perf_counter()-start;results=[]
     for name,request,obs,action,words in CASES:
         result=model.interpret(request,obs);goal=result['goal'].lower().replace('text edit','textedit')
