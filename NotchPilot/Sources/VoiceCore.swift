@@ -105,26 +105,28 @@ struct SpeechSegmenter {
         lastLevel = candidate.level; lastSilence = silent
         reset(); return true
     }
-    /// Claims a live prefix and keeps any speech received after that prefix as the next phrase.
-    /// This is intentionally reserved for exact local app launches. It lets the UI begin "Open
-    /// Notes and …" without throwing away the part after "Notes" if Whisper finishes a little late.
+    /// Claims a live snapshot only when it is still the whole utterance. Partial transcript tails
+    /// can be decoded as a repeat of the command, so a continuing utterance always stays intact
+    /// for the normal completed-phrase path.
     mutating func claimLive(_ candidate: SpeechCandidate) -> Bool {
-        guard candidate.live, active, utteranceID == candidate.id, speechEnd >= candidate.speechEnd else { return false }
-        lastLevel = candidate.level; lastSilence = silent
-        guard speechEnd > candidate.speechEnd else { reset(); return true }
-        let tail=Array(utterance[candidate.speechEnd...])
-        let tailSpeechEnd=speechEnd-candidate.speechEnd
-        reset()
-        active=true; utterance=tail; voiced=Double(tailSpeechEnd)/sampleRate
-        speechEnergy=tail.reduce(0) { $0 + Double($1 * $1) }; speechSamples=tail.count
-        speechEnd=tailSpeechEnd; silent=Double(tail.count-tailSpeechEnd)/sampleRate
-        utteranceID += 1
-        return true
+        guard candidate.live else { return false }
+        return claim(candidate)
     }
     mutating func reset() {
         utterance.removeAll(); lead.removeAll(); voiced = 0; silent = 0; active = false
         speechEnergy = 0; speechSamples = 0; speechEnd = 0; offeredEnd = -1; offeredLive = false
         if let nextPause { pause=nextPause; self.nextPause=nil }
+    }
+}
+
+/// Prevents a repeated partial transcript from relaunching the same app in a burst. This only
+/// covers identical local app launches; it never suppresses a different instruction.
+struct AppLaunchDeduper {
+    private var last: [String:Date] = [:]
+    mutating func accepts(_ bundle: String, now: Date = Date(), cooldown: TimeInterval = 3) -> Bool {
+        if let previous=last[bundle],now.timeIntervalSince(previous)<cooldown { return false }
+        last[bundle]=now
+        return true
     }
 }
 

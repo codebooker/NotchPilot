@@ -12,6 +12,9 @@ extension AppDelegate {
         guard command != nil || state.dictating else { return false }
         rememberTarget()
         let token=UUID();generation=token;state.busy=true;state.cost=0
+        if case .openApp(let bundle)=command, !appLaunchDeduper.accepts(bundle) {
+            finishVoiceAction("Already opening that app. Ready for your next request.",token:token);return true
+        }
         if state.preview { finishVoiceAction("Preview: voice editing would run locally. No document changed.",token:token);return true }
         Task { @MainActor in
         var command=command

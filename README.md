@@ -29,7 +29,7 @@ NotchPilot is an experimental, native macOS assistant that turns spoken requests
 
 It lives in a **280 × 44 point strip below the notch**. The microphone is ready when the strip opens. Waves show that it hears you; a question or short message appears when it needs help. No click-to-talk routine. No large chat window covering your work.
 
-Say **“Open Notes and…”** or **“Open Chrome”** and NotchPilot can bring the app forward while you finish the thought. It takes that shortcut only for an exact name in its small local app list. Everything that can write, save, send, browse, or make a broader choice waits for the complete instruction.
+Say **“Open Notes”** or **“Open Chrome”** and NotchPilot can bring the app forward as soon as it has a complete short request. It takes that shortcut only for an exact name in its small local app list, and ignores duplicate launches in a burst. Everything that can write, save, send, browse, or make a broader choice waits for the complete instruction.
 
 The idea is simple: make everyday computer tasks easier to ask for—whether you want fewer clicks, prefer speaking, or find conventional interfaces difficult to use. Accessibility is a design motivation; this is still a prototype, not an independently validated accessibility product.
 
@@ -44,7 +44,7 @@ The idea is simple: make everyday computer tasks easier to ask for—whether you
 | **Dictate and correct** | Say “start dictating,” keep talking, then “replace purple with blue” or “scratch that.” Native Save As recovery helps finish the document. |
 | **See what happens** | The working app comes forward. A rounded lavender cursor shows the target and action feedback. |
 | **Take your time** | Choose a one-, two-, or three-second speaking pause. Changing it does not cut off the phrase in progress. |
-| **Start simple things immediately** | Exact local app launches can begin during an ongoing utterance. Other actions wait until you have finished speaking, so a partial phrase never becomes a partial task. |
+| **Start simple things immediately** | Exact short local app launches can begin before the full speaking pause. Other actions wait until you have finished speaking, so a partial phrase never becomes a partial task. |
 | **Stay in control** | Cancel a task without closing the mic. Review and clear queued requests. Pause Cua while you type, then resume. |
 | **Keep your retinas** | Dark, Light, or Follow System for conversation and settings. The voice strip stays dark. |
 | **Download once** | Install speech recognition, speech detection, and interpretation models from Settings with progress, cancellation, and checksum verification. |

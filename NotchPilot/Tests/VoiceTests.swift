@@ -108,11 +108,13 @@ import AVFoundation
         precondition(liveGuess.live && liveGuess.silence==0 && !liveGuess.samples.isEmpty,"The candidate is marked as live")
         precondition(live.liveCandidate()==nil,"Only one live decode per utterance")
         _=live.append(voice,speech:true)
-        precondition(live.claimLive(liveGuess) && live.active,"A live app launch keeps the words spoken after its prefix")
-        for _ in 0..<2 { _=live.append(voice,speech:true) }
+        precondition(!live.claimLive(liveGuess) && live.active,"Continuing speech keeps the whole request intact")
         var liveCompleted=0
         for _ in 0..<12 { if live.append(silence,speech:false) != nil { liveCompleted+=1 } }
-        precondition(liveCompleted==1,"The preserved tail still submits after the selected pause")
+        precondition(liveCompleted==1,"A declined live candidate still submits after the selected pause")
+        var launches=AppLaunchDeduper();let now=Date(timeIntervalSinceReferenceDate:1_000)
+        precondition(launches.accepts("com.google.Chrome",now:now) && !launches.accepts("com.google.Chrome",now:now.addingTimeInterval(1)),"Repeated app transcripts are deduplicated")
+        precondition(launches.accepts("com.apple.Notes",now:now.addingTimeInterval(1)) && launches.accepts("com.google.Chrome",now:now.addingTimeInterval(3)),"Different apps and later deliberate launches still work")
         var lengthy=SpeechSegmenter(sampleRate:16000,pause:1)
         for _ in 0..<40 { _=lengthy.append(voice,speech:true) }
         for _ in 0..<5 { _=lengthy.append(silence,speech:false) }

@@ -271,6 +271,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// Developer detail for QA status when host input is refused.
     var hostDiagnostic = ""
     var levelGate = VoiceLevelGate(levels:UserDefaults.standard.array(forKey:"voiceLevels") as? [Double] ?? [])
+    var appLaunchDeduper = AppLaunchDeduper()
     var pointing: Pointing?
     let speechOutput = SpeechOutput()
     var voiceCheckWindow: NSWindow?
