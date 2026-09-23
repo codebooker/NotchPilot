@@ -504,8 +504,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         pendingVoiceStart=false
         refreshModels()
-        guard state.whisperInstalled && state.vadInstalled && (!state.localInterpreter || state.qwenInstalled) else {
-            state.phase="Needs attention";state.detail="Download the missing local models in Settings."; showSettings(); return
+        guard state.whisperInstalled && state.vadInstalled else {
+            state.phase="Needs attention";state.detail="Download the missing speech models in Settings."; showSettings(); return
         }
         if state.question.isEmpty { commands.cancel() }
         startListening()
@@ -756,8 +756,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func interpretCommand() {
-        guard let runtime else { fail("Local runtime is unavailable."); return }
         rememberTarget()
+        if BrowserFastPath.youtubeVideoRequest(originalGoal) {
+            resolvedGoal=originalGoal;state.interpreted=originalGoal;launchCommand(originalGoal);return
+        }
+        guard let runtime else { fail("Local runtime is unavailable."); return }
         if !state.localInterpreter { resolvedGoal=originalGoal; launchCommand(originalGoal); return }
         refreshModels()
         guard state.qwenInstalled else { fail("Download Qwen in Settings to interpret this request."); showSettings(); return }

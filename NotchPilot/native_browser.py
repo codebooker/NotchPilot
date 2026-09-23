@@ -6,9 +6,9 @@ checks are deliberately task-specific so opening search results isn't success.
 from collections import deque
 import re
 import time
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 
-from navigation import browser_task, browser_url, normalize_url, navigate, dismiss_notification_prompt, target_point
+from navigation import BROWSERS, browser_task, browser_url, normalize_url, navigate, dismiss_notification_prompt, target_point
 
 
 def recipe_task(goal):
@@ -118,6 +118,90 @@ def recipe_evidence(page):
     quantities = re.findall(r'\b\d+(?:[./]\d+)?\s*(?:cups?|tablespoons?|teaspoons?|tbsp|tsp|g|grams?|ml|ounces?|oz|pounds?|lb)\b', ingredient_body, re.I)
     verbs = re.findall(r'\b(?:mix|bake|stir|fold|roll|preheat|cook|add|place|brush|peel|combine|heat)\b',method_body,re.I)
     return len(quantities)>=2 and len(verbs)>=3
+
+
+def youtube_task(request):
+    """Recognize one bounded request to find a video on YouTube.
+
+    This intentionally needs both an explicit YouTube destination and a video
+    request. General web research continues through the controller instead of
+    silently substituting a search site or selecting an unrelated result.
+    """
+    if '\n' in request: return None
+    text=request.strip().rstrip('.!?').strip()
+    text=re.sub(r'^(?:please|could you|can you|would you)\s+','',text,flags=re.I)
+    names='|'.join(re.escape(name) for name in sorted(BROWSERS,key=len,reverse=True))
+    prefix=re.match(rf'^(?:open|create) (?:a )?new tab(?: in (?P<browser>{names}))?(?=$|[, ]+(?:and|then))',text,re.I)
+    new_tab=bool(prefix);browser=BROWSERS.get(prefix['browser'].lower()) if prefix and prefix['browser'] else None
+    if prefix:
+        text=text[prefix.end():].strip()
+        connector=re.match(r'^,?\s*(?:and then|and|then)\s+',text,re.I)
+        if not connector: return None
+        text=text[connector.end():]
+    match=re.fullmatch(r'(?:go to |open |visit |launch )?(?:the )?you\s*tube(?: (?:website|site))?\s*(?:,?\s*(?:and then|and|then)\s*)?(?:find(?: me)?|search(?: youtube)? for|look up|show me)\s+(.+)',text,re.I)
+    if not match: return None
+    query=match[1].strip().rstrip('.!?').strip()
+    if not re.search(r'\b(?:video|videos|clip|clips)\b',query,re.I): return None
+    if not 1<=len(query)<=500 or any(ord(char)<32 for char in query): return None
+    if re.search(r'\b(?:then|afterwards|after that)\b|(?:\band\b|[;.!?])\s*(?:open|close|delete|send|book|buy|click|save|download|compare|summarize|tell|fill|sign|log|go|find|search)\b',query,re.I): return None
+    return dict(outcome='youtube_video',goal=request,new_tab=new_tab,browser=browser,query=query,
+                url='https://www.youtube.com/results?'+urlencode({'search_query':query}))
+
+
+def youtube_video_url(url):
+    try:
+        parsed=urlsplit(url)
+        return parsed.scheme=='https' and parsed.hostname in ('youtube.com','www.youtube.com','m.youtube.com') and parsed.path=='/watch' and 'v=' in parsed.query
+    except (TypeError,ValueError):
+        return False
+
+
+def choose_youtube_video(page,query):
+    """Pick only an observed video result, preferring title words from the request."""
+    ignored={'a','an','and','for','from','me','on','the','to','video','videos','watch','youtube'}
+    wanted=[word for word in re.findall(r"[a-z0-9']+",query.casefold()) if len(word)>1 and word not in ignored]
+    candidates=[]
+    for index,link in enumerate(page.get('links',[])):
+        if not youtube_video_url(link.get('url')): continue
+        label=str(link.get('label') or '').strip()
+        if not label: continue
+        text=label.casefold()
+        score=sum(1 for word in wanted if word in text)
+        candidates.append((score,-index,link))
+    if not candidates: return None
+    # A YouTube result page is already ranked for the user's exact query. The
+    # lexical score breaks ties without another model round-trip.
+    return max(candidates,key=lambda row:(row[0],row[1]))[2]
+
+
+def run_youtube_video(plan,pid,front_pid,emit,handshake):
+    """Open one visible matching YouTube result without a controller/API call."""
+    from typesafe_computer_use import macos
+    browser=NativeBrowser(pid,front_pid)
+    started=time.monotonic()
+    page=None
+    for _ in range(12):
+        page=browser.observe()
+        link=choose_youtube_video(page,plan['query'])
+        if link is not None: break
+        macos.sleep_watching(.25)
+    else:
+        emit('done',success=False,text='YouTube search opened, but no accessible video result was ready yet. The search remains open.',cost=0)
+        return None
+    handshake('target',label=link['label'],kind='click',**target_point(link['ref']),
+              input_mode='Observed YouTube result',confidence=1,cost=0)
+    try: browser.follow(page,link)
+    finally: emit('action_end')
+    for _ in range(16):
+        macos.sleep_watching(.2)
+        opened=browser.observe()
+        if youtube_video_url(opened['url']):
+            receipt=dict(url=opened['url'],title=opened['title'],seconds=round(time.monotonic()-started,2),
+                         transport='macOS Accessibility',video=link['label'])
+            emit('done',success=True,text='Opened a YouTube video: '+link['label'],cost=0)
+            return receipt
+    emit('done',success=False,text='A YouTube video result was selected, but its video page could not be verified. The browser remains open.',cost=0)
+    return None
 
 
 def run_recipe(plan, pid, front_pid, api, emit, handshake, on_result=None):

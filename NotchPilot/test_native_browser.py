@@ -2,10 +2,40 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from native_browser import recipe_task, recipe_evidence, NativeBrowser, run_recipe, safe_link
+from native_browser import recipe_task, recipe_evidence, NativeBrowser, run_recipe, safe_link, youtube_task, choose_youtube_video, run_youtube_video
 
 
 class NativeBrowserTests(unittest.TestCase):
+    def test_youtube_route_requires_explicit_video_request_and_keeps_browser_tab(self):
+        plan=youtube_task('Open a new tab in Google Chrome and go to YouTube and find me a funny cat video')
+        self.assertEqual(plan['outcome'],'youtube_video')
+        self.assertTrue(plan['new_tab'])
+        self.assertEqual(plan['browser'],'Google Chrome')
+        self.assertIn('funny+cat+video',plan['url'])
+        self.assertIsNone(youtube_task('Go to YouTube'))
+        self.assertIsNone(youtube_task('Find me a funny cat video'))
+        self.assertIsNone(youtube_task('Go to YouTube and find me a funny cat video then send it to Tom'))
+
+    def test_youtube_result_is_observed_and_ranked_without_a_model(self):
+        links=[
+            {'id':'1','label':'A very serious dog','url':'https://www.youtube.com/watch?v=dog','ref':'dog'},
+            {'id':'2','label':'Funny cats falling asleep','url':'https://www.youtube.com/watch?v=cat','ref':'cat'},
+            {'id':'3','label':'Funny cat channel','url':'https://www.youtube.com/@cats','ref':'channel'},
+        ]
+        self.assertEqual(choose_youtube_video({'links':links},'funny cat video')['id'],'2')
+        self.assertIsNone(choose_youtube_video({'links':[links[2]]},'funny cat video'))
+
+    def test_youtube_runner_verifies_the_video_page(self):
+        search={'url':'https://www.youtube.com/results?search_query=funny+cat+video','title':'YouTube','text':'',
+                'links':[{'id':'2','label':'Funny cats','url':'https://www.youtube.com/watch?v=cat','ref':'cat'}], 'truncated':False}
+        opened={'url':'https://www.youtube.com/watch?v=cat','title':'Funny cats','text':'', 'links':[], 'truncated':False}
+        events=[]
+        with patch('native_browser.NativeBrowser') as browser,patch('native_browser.target_point',return_value={'x':1,'y':2}),patch('typesafe_computer_use.macos.sleep_watching'):
+            browser.return_value.observe.side_effect=[search,opened]
+            result=run_youtube_video({'query':'funny cat video'},1,lambda:1,lambda event,**fields:events.append((event,fields)),lambda *a,**k:None)
+        self.assertEqual(result['url'],opened['url'])
+        self.assertEqual(browser.return_value.follow.call_args.args[1]['label'],'Funny cats')
+        self.assertTrue(events[-1][1]['success'])
     def test_route_preserves_qualifiers_and_compound_boundary(self):
         goal='Open a new tab in Google Chrome and find me a gluten free recipe for apple strudel'
         plan=recipe_task(goal)

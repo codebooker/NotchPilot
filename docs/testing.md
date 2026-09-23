@@ -22,7 +22,7 @@ uv pip install --python .venv/bin/python -r requirements-test.txt
 .venv/bin/python -B -m unittest discover -s NotchPilot -p 'test_*.py'
 ```
 
-The current suite has **111 tests**. They cover request validation, navigation verification, command ordering and stage budgets, unreadable-window recovery, fresh element tokens, cancellation/checkpoints, model download integrity, signing identity stability, and experimental adapter behavior. API responses and desktop input are mocked. No API key or model download is required for these checks.
+The current suite has **143 tests**. They cover request validation, navigation verification, command ordering and stage budgets, unreadable-window recovery, fresh element tokens, cancellation/checkpoints, model download integrity, signing identity stability, YouTube video search/result verification, and experimental adapter behavior. API responses and desktop input are mocked. No API key or model download is required for these checks.
 
 Files named `test_flight_live.py` and `test_recipe_live.py` are explicit manual runners, not unittest cases. Do not launch them as ordinary unit tests: they control apps and can incur API usage. The flight example also contains fixed example dates that must be updated before a relevant live test.
 
@@ -124,6 +124,7 @@ Use disposable documents and public sample URLs. Confirm results in the target a
 | Open/close with hotkey | Mic becomes active; the second press stops capture and work. |
 | Calculator 6 × 7 | Visible expression and result 42; no duplicate or stale clicks. |
 | New Chrome tab → example.com | One additional tab, same browser window, loaded destination. |
+| New Chrome tab → YouTube funny cat video | One additional tab, the spoken search, an observed `/watch` result, and a verified video URL. |
 | Short app chain | Apps come forward in the requested order. |
 | TextEdit disposable file | Exact content and an actual saved result. |
 | Review while working | Pause before the editor takes focus; correct queued text; safe resume. |

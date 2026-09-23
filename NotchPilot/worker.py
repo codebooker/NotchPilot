@@ -177,12 +177,15 @@ def execute_browser_task(plan,catalog,front,preview=False,api=None,report=True):
         label='Search for '+plan['query'] if plan['query'] else 'Navigate to '+plan['url']
         handshake('target',label=label,kind='search' if plan['query'] else 'navigate',x=None,y=None,
                   input_mode='Address bar · exact request text',confidence=1,cost=0)
-        verified=navigate(plan['url'],pid,lambda:front()[1],search_query=plan['query'])
+        verified=navigate(plan['url'],pid,lambda:front()[1],search_query=plan['query'] if plan.get('outcome')!='youtube_video' else None)
         if not verified:
             return finish(False,'The tab is open and the address was entered, but the resulting page could not be verified. Check for a loading error or redirect.')
     if plan.get('outcome')=='recipe':
         from native_browser import run_recipe
         return run_recipe(plan,pid,lambda:front()[1],api,emit,handshake)
+    if plan.get('outcome')=='youtube_video':
+        from native_browser import run_youtube_video
+        return run_youtube_video(plan,pid,lambda:front()[1],emit,handshake)
     if plan['query']:
         message='Search results opened'+(' in a new tab' if plan['new_tab'] else '')+' for: '+plan['query']
         if re.search(r'\bflights?\b',plan['query'],re.I):
@@ -377,8 +380,8 @@ def run(root,goal,preview=False,provider='openrouter',allow_writer=False,context
     if flight_route(authorization or goal):
         raise RuntimeError('Flight research needs route and date details. Enable local interpretation, then specify departure and return dates (or one-way). A Google search alone is not task completion.')
     catalog=apps()
-    from native_browser import recipe_task
-    browser_plan=recipe_task(authorization or goal) or browser_task(authorization or goal)
+    from native_browser import recipe_task, youtube_task
+    browser_plan=recipe_task(authorization or goal) or youtube_task(authorization or goal) or browser_task(authorization or goal)
     direct=exact_app(goal,catalog) if not browser_plan else None
     if direct:
         def frontmost_path():
@@ -520,6 +523,14 @@ def read_request():
 async def run_cua_request(args,request,goal,context,authorization,driver=None):
     import asyncio
     from cua_agent import run as run_cua
+    # Cua remains the default engine, but a bounded YouTube video request has a
+    # faster native Accessibility route. It avoids a sequence of remote
+    # controller decisions while preserving the same visible cursor/handshake
+    # and verification guarantees as the regular worker.
+    from native_browser import youtube_task
+    if youtube_task(authorization):
+        await asyncio.to_thread(run,args.root,authorization,args.preview,args.provider,args.allow_writer,context,authorization)
+        return
     folder=literal_folder_request(authorization)
     if folder:
         await asyncio.to_thread(run_literal_folder,args.root,folder,args.preview);return

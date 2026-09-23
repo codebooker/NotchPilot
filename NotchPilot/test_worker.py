@@ -3,7 +3,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import httpx
 from worker import API,validate_choice
@@ -99,6 +99,16 @@ class DesktopContractTests(unittest.TestCase):
         for goal in ['Open Chrome and find a flight','Go to example.com in Chrome then send an email',
                      'Open a new tab in Chrome and search for recipes','Type "go to example.com in Chrome"']:
             self.assertIsNone(literal_browser_chain(goal))
+    def test_cua_routes_youtube_video_to_the_fast_verified_browser_path(self):
+        from worker import run_cua_request
+        import asyncio
+        args=SimpleNamespace(root=Path('/unused'),preview=False,provider='openrouter',allow_writer=False,model='openai/gpt-5-mini')
+        request={}
+        goal='Open a new tab in Google Chrome and go to YouTube and find me a funny cat video'
+        with patch('worker.run') as fast,patch('asyncio.to_thread',new_callable=AsyncMock) as thread:
+            asyncio.run(run_cua_request(args,request,goal,[],goal))
+        self.assertEqual(thread.call_args.args[0],fast)
+        self.assertEqual(thread.call_args.args[2],goal)
     def test_capture_uses_app_acknowledgement_and_removes_temporary_image(self):
         from PIL import Image
         from worker import app_screenshot
