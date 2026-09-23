@@ -639,9 +639,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         guard audioQueue.count < 8 else { try? FileManager.default.removeItem(at:url); fail("Speech queue is full. Please let the current instructions finish."); return }
         audioQueue.append(url); transcribeNext()
     }
-    /// Early commands: recognize a short phrase partway through the pause. If it is a complete
-    /// command and nothing was said since, act now instead of waiting for the rest of the pause.
-    /// Only when no earlier phrase is still waiting, so order is preserved.
+    /// Early commands either run partway through a pause, or (for an exact local app launch only)
+    /// while the person is still speaking. A live decode is never allowed to type, browse, save,
+    /// or send anything. Only when no earlier phrase is still waiting, so order is preserved.
     func receiveCandidate(_ url: URL, candidate: SpeechCandidate, epoch: UUID, token: UUID) {
         guard voiceGeneration == token, audioEpoch == epoch, !transcribing, audioQueue.isEmpty,
               candidate.level.map({ !state.ignoreQuieterVoices || levelGate.wouldAccept($0) }) ?? true else {
@@ -652,7 +652,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         transcribe(url,dictation:settings.dictation,prompt:settings.prompt) { [weak self] result in
             try? FileManager.default.removeItem(at:url)
             guard let self, self.voiceGeneration == token, self.audioEpoch == epoch, case .success(let text)=result,
-                  SpeechText.completesEarly(text,overlay:self.pointing != nil), self.speech?.claim(candidate) == true,
+                  (candidate.live ? SpeechText.startsInstantly(text) : SpeechText.completesEarly(text,overlay:self.pointing != nil)),
+                  (candidate.live ? self.speech?.claimLive(candidate) : self.speech?.claim(candidate)) == true,
                   self.acceptLevel(candidate.level) else { return }
             self.handleTranscript(text,seconds:Date().timeIntervalSince(ended),level:candidate.level)
         }

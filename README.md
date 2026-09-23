@@ -29,6 +29,8 @@ NotchPilot is an experimental, native macOS assistant that turns spoken requests
 
 It lives in a **280 × 44 point strip below the notch**. The microphone is ready when the strip opens. Waves show that it hears you; a question or short message appears when it needs help. No click-to-talk routine. No large chat window covering your work.
 
+Say **“Open Notes and…”** and NotchPilot can bring Notes forward while you finish the thought. It takes that shortcut only for an exact name in its small local app list. Everything that can write, save, send, browse, or make a broader choice waits for the complete instruction.
+
 The idea is simple: make everyday computer tasks easier to ask for—whether you want fewer clicks, prefer speaking, or find conventional interfaces difficult to use. Accessibility is a design motivation; this is still a prototype, not an independently validated accessibility product.
 
 > **Source preview, not a finished download.** This repository contains the working prototype and its tests. Build it on your own Mac; there is no portable, notarized installer yet. General computer-use reliability is still being improved.
@@ -42,6 +44,7 @@ The idea is simple: make everyday computer tasks easier to ask for—whether you
 | **Dictate and correct** | Say “start dictating,” keep talking, then “replace purple with blue” or “scratch that.” Native Save As recovery helps finish the document. |
 | **See what happens** | The working app comes forward. A rounded lavender cursor shows the target and action feedback. |
 | **Take your time** | Choose a one-, two-, or three-second speaking pause. Changing it does not cut off the phrase in progress. |
+| **Start simple things immediately** | Exact local app launches can begin during an ongoing utterance. Other actions wait until you have finished speaking, so a partial phrase never becomes a partial task. |
 | **Stay in control** | Cancel a task without closing the mic. Review and clear queued requests. Pause Cua while you type, then resume. |
 | **Keep your retinas** | Dark, Light, or Follow System for conversation and settings. The voice strip stays dark. |
 | **Download once** | Install speech recognition, speech detection, and interpretation models from Settings with progress, cancellation, and checksum verification. |
@@ -137,6 +140,7 @@ Open the gear → **Everyday**.
 | **Appearance** | Dark, Light, or Follow System. Saved across launches. |
 | **Your shortcut** | Change the default **Control–Option–Space** to a combination you prefer. |
 | **Time to finish speaking** | Quick · 1 second, Relaxed · 2 seconds, or Unhurried · 3 seconds. |
+| **Start safe commands sooner** | Lets exact local app opens begin while you finish talking. Quick controls can also run during a pause; broader tasks always wait for the full request. |
 | **Close when the task is finished** | Close after successful work and a short grace period, or keep listening for the next request. |
 | **Strip position** | Drag it out of the way, or move it back below the notch. |
 
@@ -220,7 +224,7 @@ After setup:
 .cache/notch-venv/bin/python -B -m unittest discover -s NotchPilot -p 'test_*.py'
 ```
 
-The published snapshot has **111 passing Python tests**, plus native voice and session checks. CI runs model-free Python tests, Swift typechecking, and voice segmentation/audio conversion; it does not drive a real desktop or call paid models.
+The published snapshot has **143 passing Python tests**, plus native voice and session checks. CI runs model-free Python tests, Swift typechecking, and voice segmentation/audio conversion; it does not drive a real desktop or call paid models.
 
 Read [CONTRIBUTING](CONTRIBUTING.md), [Architecture](docs/architecture.md), and [Testing](docs/testing.md) before changing input delivery, microphone behavior, or cancellation.
 

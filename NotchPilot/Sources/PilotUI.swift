@@ -345,8 +345,8 @@ struct PreferencesView: View {
                     }.pickerStyle(.segmented).tint(PilotStyle.accent).labelsHidden()
                     Text("Choose a longer pause if you like to think between words. Changes apply to your next phrase.")
                         .font(.system(size:13)).foregroundStyle(PilotStyle.secondary)
-                    Toggle("Respond sooner to short commands",isOn:$state.earlyCommands).toggleStyle(.switch).padding(.top,4)
-                    Text("Commands like “stop”, “scratch that”, and grid numbers run partway through the pause. Longer requests always wait for the full pause.")
+                    Toggle("Start safe commands sooner",isOn:$state.earlyCommands).toggleStyle(.switch).padding(.top,4)
+                    Text("Quick controls run during a pause. Known app opens can begin while you finish a request; writing, saving, sending, and web tasks wait for the full instruction.")
                         .font(.system(size:13)).foregroundStyle(PilotStyle.secondary)
                 }
                 Divider()

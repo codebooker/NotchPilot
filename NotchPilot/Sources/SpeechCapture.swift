@@ -21,12 +21,14 @@ final class SpeechCapture {
     var lastMeter = Date.distantPast
     /// Completed phrase: audio, epoch, speech level, and the silence that ended it.
     var onSegment: ((URL, UUID, Double?, Double) -> Void)?
-    /// A short phrase paused partway through the pause, offered for early recognition.
+    /// A compact live phrase or a phrase paused partway through the pause, offered for early recognition.
     var onCandidate: ((URL, SpeechCandidate, UUID) -> Void)?
     private var earlyCommands = true
     func setEarlyCommands(_ on: Bool) { queue.sync { earlyCommands=on } }
     /// Ends the current phrase now if nothing was said since `candidate`.
     func claim(_ candidate: SpeechCandidate) -> Bool { queue.sync { segmenter?.claim(candidate) ?? false } }
+    /// Claims a live app-launch prefix and preserves any speech that followed it.
+    func claimLive(_ candidate: SpeechCandidate) -> Bool { queue.sync { segmenter?.claimLive(candidate) ?? false } }
     /// Microphone-equivalent input for replays: the same VAD and segmentation path as the audio tap.
     func replay(_ samples: [Float]) { queue.async { guard self.running,!self.muted else { return }; self.enqueueForVAD(samples) } }
     /// Feeds already-classified audio, as the microphone path does after VAD (tests and replays).
@@ -129,9 +131,13 @@ final class SpeechCapture {
             do { onSegment?(try Self.write(completed,sampleRate:16000),segmentEpoch,segmenter?.lastLevel,segmenter?.lastSilence ?? 0) }
             catch { onError?("Could not prepare speech for local Whisper.") }
             vad?.reset()
-        } else if earlyCommands,let pause=segmenter?.pause,let candidate=segmenter?.candidate(after:pause*0.4),
-                  let url=try? Self.write(candidate.samples,sampleRate:16000) {
-            onCandidate?(url,candidate,segmentEpoch)
+        } else if earlyCommands {
+            if let candidate=segmenter?.liveCandidate(),let url=try? Self.write(candidate.samples,sampleRate:16000) {
+                onCandidate?(url,candidate,segmentEpoch)
+            } else if let pause=segmenter?.pause,let candidate=segmenter?.candidate(after:pause*0.4),
+                      let url=try? Self.write(candidate.samples,sampleRate:16000) {
+                onCandidate?(url,candidate,segmentEpoch)
+            }
         }
         if segmenter?.overflow == true {
             segmenter?.overflow=false;vad?.reset()

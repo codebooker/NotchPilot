@@ -44,6 +44,14 @@ enum SpeechText {
         }
     }
 
+    /// The only action allowed while speech is still arriving. It is finite, local, reversible in
+    /// practice, and makes "Open Notes and …" feel immediate without guessing at the rest.
+    static func startsInstantly(_ text: String) -> Bool {
+        guard !isNonSpeech(text) else { return false }
+        if case .openApp? = VoiceEditCommand.parse(text) { return true }
+        return false
+    }
+
     /// Gives whole-word vocabulary matches their saved spelling ("notchpilot" → "NotchPilot").
     static func applyVocabulary(_ text: String, _ vocabulary: [String]) -> String {
         vocabulary.reduce(text) { result, word in

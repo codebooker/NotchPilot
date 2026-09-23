@@ -5,13 +5,15 @@ protocol SpeechFrameClassifier: AnyObject {
     func reset()
 }
 
-/// A short phrase whose speech has paused, offered for early recognition of a complete command.
+/// A short slice of an utterance offered for early recognition. `live` candidates are deliberately
+/// limited to safe, local actions; ordinary candidates are offered after a short pause.
 struct SpeechCandidate {
     let id: Int
     let speechEnd: Int
     let samples: [Float]
     let level: Double?
     let silence: Double
+    let live: Bool
 }
 
 // Pure state machines shared by microphone capture, the app, and replay tests.
@@ -44,6 +46,7 @@ struct SpeechSegmenter {
     private var utteranceID = 0
     private var speechEnd = 0
     private var offeredEnd = -1
+    private var offeredLive = false
     private var level: Double? { speechSamples>0 ? 10 * log10(max(speechEnergy / Double(speechSamples), 1e-12)) : nil }
 
     /// `speech` comes from the resident Silero VAD, not a volume threshold.
@@ -85,7 +88,16 @@ struct SpeechSegmenter {
         guard active, !discarding, silent >= silence, silent < pause, voiced >= 0.25, offeredEnd != speechEnd,
               Double(speechEnd) / sampleRate <= maxDuration else { return nil }
         offeredEnd = speechEnd
-        return SpeechCandidate(id: utteranceID, speechEnd: speechEnd, samples: utterance, level: level, silence: silent)
+        return SpeechCandidate(id: utteranceID, speechEnd: speechEnd, samples: utterance, level: level, silence: silent, live: false)
+    }
+    /// Offers one compact in-progress utterance while the speaker is still talking. Recognition may
+    /// only claim this when it exactly resolves to a known app-launch command. One attempt avoids
+    /// competing Whisper decodes on every VAD frame.
+    mutating func liveCandidate(after voicedSeconds: Double = 0.6, maxDuration: Double = 1.6) -> SpeechCandidate? {
+        guard active, !discarding, silent == 0, voiced >= voicedSeconds, !offeredLive,
+              Double(speechEnd) / sampleRate <= maxDuration else { return nil }
+        offeredLive = true
+        return SpeechCandidate(id: utteranceID, speechEnd: speechEnd, samples: utterance, level: level, silence: 0, live: true)
     }
     /// Ends the phrase now if nothing was said since the candidate; the rest of the pause emits nothing.
     mutating func claim(_ candidate: SpeechCandidate) -> Bool {
@@ -93,9 +105,25 @@ struct SpeechSegmenter {
         lastLevel = candidate.level; lastSilence = silent
         reset(); return true
     }
+    /// Claims a live prefix and keeps any speech received after that prefix as the next phrase.
+    /// This is intentionally reserved for exact local app launches. It lets the UI begin "Open
+    /// Notes and …" without throwing away the part after "Notes" if Whisper finishes a little late.
+    mutating func claimLive(_ candidate: SpeechCandidate) -> Bool {
+        guard candidate.live, active, utteranceID == candidate.id, speechEnd >= candidate.speechEnd else { return false }
+        lastLevel = candidate.level; lastSilence = silent
+        guard speechEnd > candidate.speechEnd else { reset(); return true }
+        let tail=Array(utterance[candidate.speechEnd...])
+        let tailSpeechEnd=speechEnd-candidate.speechEnd
+        reset()
+        active=true; utterance=tail; voiced=Double(tailSpeechEnd)/sampleRate
+        speechEnergy=tail.reduce(0) { $0 + Double($1 * $1) }; speechSamples=tail.count
+        speechEnd=tailSpeechEnd; silent=Double(tail.count-tailSpeechEnd)/sampleRate
+        utteranceID += 1
+        return true
+    }
     mutating func reset() {
         utterance.removeAll(); lead.removeAll(); voiced = 0; silent = 0; active = false
-        speechEnergy = 0; speechSamples = 0; speechEnd = 0; offeredEnd = -1
+        speechEnergy = 0; speechSamples = 0; speechEnd = 0; offeredEnd = -1; offeredLive = false
         if let nextPause { pause=nextPause; self.nextPause=nil }
     }
 }

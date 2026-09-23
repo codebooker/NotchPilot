@@ -212,6 +212,8 @@ import Foundation
             precondition(!SpeechText.completesEarly(phrase,overlay:false),"Might continue: "+phrase)
         }
         precondition(SpeechText.completesEarly("5",overlay:true) && SpeechText.completesEarly("Go back.",overlay:true),"Numbers are complete while an overlay shows")
+        precondition(SpeechText.startsInstantly("Open Notes.") && SpeechText.startsInstantly("Launch Google Chrome"),"Known local app opens can start while speech continues")
+        precondition(!SpeechText.startsInstantly("Open Notes and create a grocery list.") && !SpeechText.startsInstantly("Save this document."),"Live recognition never guesses a follow-up or consequential action")
         // Decision models: default first, priced so Settings can compare them.
         precondition(ControllerModels.options.first?.id=="openai/gpt-5-mini" && ControllerModels.options.count==4)
         precondition(ControllerModels.options.dropFirst().allSatisfy { $0.task<ControllerModels.options[0].task },"Every alternative is cheaper per task than the default")

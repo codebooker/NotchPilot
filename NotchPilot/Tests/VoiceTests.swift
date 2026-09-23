@@ -98,6 +98,21 @@ import AVFoundation
         var emitted=0
         for _ in 0..<12 { if early.append(silence,speech:false) != nil { emitted+=1 } }
         precondition(emitted==1 && abs(early.lastSilence-1.0)<0.11,"Unclaimed phrases still end after the full pause, reporting it")
+        // A single in-progress snapshot can make a finite app launch feel immediate. It must never
+        // steal the rest of an utterance: more speech invalidates the snapshot and normal capture continues.
+        var live=SpeechSegmenter(sampleRate:16000,pause:1)
+        for _ in 0..<5 { _=live.append(voice,speech:true) }
+        precondition(live.liveCandidate()==nil,"Wait for enough spoken audio before one live decode")
+        _=live.append(voice,speech:true)
+        let liveGuess=live.liveCandidate()!
+        precondition(liveGuess.live && liveGuess.silence==0 && !liveGuess.samples.isEmpty,"The candidate is marked as live")
+        precondition(live.liveCandidate()==nil,"Only one live decode per utterance")
+        _=live.append(voice,speech:true)
+        precondition(live.claimLive(liveGuess) && live.active,"A live app launch keeps the words spoken after its prefix")
+        for _ in 0..<2 { _=live.append(voice,speech:true) }
+        var liveCompleted=0
+        for _ in 0..<12 { if live.append(silence,speech:false) != nil { liveCompleted+=1 } }
+        precondition(liveCompleted==1,"The preserved tail still submits after the selected pause")
         var lengthy=SpeechSegmenter(sampleRate:16000,pause:1)
         for _ in 0..<40 { _=lengthy.append(voice,speech:true) }
         for _ in 0..<5 { _=lengthy.append(silence,speech:false) }
