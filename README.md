@@ -29,7 +29,7 @@ NotchPilot is an experimental, native macOS assistant that turns spoken requests
 
 It lives in a **280 × 44 point strip below the notch**. The microphone is ready when the strip opens. Waves show that it hears you; a question or short message appears when it needs help. No click-to-talk routine. No large chat window covering your work.
 
-Say **“Open Notes and…”** and NotchPilot can bring Notes forward while you finish the thought. It takes that shortcut only for an exact name in its small local app list. Everything that can write, save, send, browse, or make a broader choice waits for the complete instruction.
+Say **“Open Notes and…”** or **“Open Chrome”** and NotchPilot can bring the app forward while you finish the thought. It takes that shortcut only for an exact name in its small local app list. Everything that can write, save, send, browse, or make a broader choice waits for the complete instruction.
 
 The idea is simple: make everyday computer tasks easier to ask for—whether you want fewer clicks, prefer speaking, or find conventional interfaces difficult to use. Accessibility is a design motivation; this is still a prototype, not an independently validated accessibility product.
 

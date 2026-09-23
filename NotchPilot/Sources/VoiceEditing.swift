@@ -67,7 +67,8 @@ enum VoiceEditCommand: Equatable {
             return spoken.count==words.count || words.first=="number" ? .number(number) : .choose(number,.click)
         }
         let apps=["textedit":"com.apple.TextEdit","safari":"com.apple.Safari","finder":"com.apple.finder",
-                  "calculator":"com.apple.calculator","google chrome":"com.google.Chrome","notes":"com.apple.Notes","mail":"com.apple.mail"]
+                  "calculator":"com.apple.calculator","google chrome":"com.google.Chrome","chrome":"com.google.Chrome",
+                  "notes":"com.apple.Notes","mail":"com.apple.mail"]
         for (name,bundle) in apps where ["open "+name,"switch to "+name,"launch "+name].contains(normalized) { return .openApp(bundle) }
         func parts(_ pattern:String) -> [String]? {
             guard let regex=try? NSRegularExpression(pattern:pattern,options:[.caseInsensitive,.dotMatchesLineSeparators]),

@@ -10,6 +10,7 @@ import Foundation
         owner.panel=FloatingPanel(contentRect:.zero,styleMask:[.borderless],backing:.buffered,defer:false)
         precondition(!owner.panel.canBecomeKey,"The voice strip must never capture keyboard focus from the working app")
         precondition(VoiceEditCommand.parse("Open TextEdit.") == .openApp("com.apple.TextEdit"))
+        precondition(VoiceEditCommand.parse("Open Chrome.") == .openApp("com.google.Chrome"),"Chrome should not need its formal app name")
         precondition(VoiceEditCommand.parse("Replace purple with blue.") == .replace("purple","blue"))
         precondition(VoiceEditCommand.parse("Next field") == .key("tab"))
         precondition(VoiceEditCommand.parse("Press shift tab") == .key("backtab"))
@@ -212,7 +213,7 @@ import Foundation
             precondition(!SpeechText.completesEarly(phrase,overlay:false),"Might continue: "+phrase)
         }
         precondition(SpeechText.completesEarly("5",overlay:true) && SpeechText.completesEarly("Go back.",overlay:true),"Numbers are complete while an overlay shows")
-        precondition(SpeechText.startsInstantly("Open Notes.") && SpeechText.startsInstantly("Launch Google Chrome"),"Known local app opens can start while speech continues")
+        precondition(SpeechText.startsInstantly("Open Notes.") && SpeechText.startsInstantly("Launch Google Chrome") && SpeechText.startsInstantly("Open Chrome"),"Known local app opens can start while speech continues")
         precondition(!SpeechText.startsInstantly("Open Notes and create a grocery list.") && !SpeechText.startsInstantly("Save this document."),"Live recognition never guesses a follow-up or consequential action")
         // Decision models: default first, priced so Settings can compare them.
         precondition(ControllerModels.options.first?.id=="openai/gpt-5-mini" && ControllerModels.options.count==4)
